@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GD Route Planner</title>
+  <meta
+    name="description"
+    content="Build an optimized Geometry Dash route from your current skill level to the top."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Teko:wght@500;600&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header panel">
+      <div class="app-header__top">
+        <div class="app-header__copy">
+          <p class="section-kicker">Geometry Dash</p>
+          <h1>GD Route Planner</h1>
+          <p class="app-header__lede">
+            Build an optimized path from your current skill level to the top.
+          </p>
+        </div>
+        <div class="app-header__signals">
+          <span class="signal">Route v4.0</span>
+          <span class="signal">Verified March 21, 2026</span>
+          <span class="signal" id="meta-route-mode">Adaptive Route</span>
+          <span class="signal" id="meta-theme-label">Theme Arcade</span>
+        </div>
+      </div>
+
+      <section class="progress-card">
+        <div class="progress-card__top">
+          <div>
+            <p class="panel-heading__kicker">Main Route Progress</p>
+            <strong class="progress-card__value" id="main-progress-label">0 / 0 cleared</strong>
+          </div>
+          <div class="progress-card__meta">
+            <span id="meta-main-count">0 Main Levels</span>
+            <span id="meta-bonus-count">0 Bonus Levels</span>
+          </div>
+        </div>
+        <p class="progress-card__copy" id="main-progress-subtext">Loading route...</p>
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-track__fill" id="main-progress-fill"></div>
+        </div>
+      </section>
+
+      <div class="stats-grid">
+        <article class="metric-card">
+          <span class="metric-card__label">Current World</span>
+          <strong class="metric-card__value" id="mini-current-world">World 1</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-card__label">Worlds Cleared</span>
+          <strong class="metric-card__value" id="mini-worlds-cleared">0 / 0 cleared</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-card__label">Bonus Clears</span>
+          <strong class="metric-card__value" id="mini-bonus-clears">0 / 0 bonus</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-card__label">Campaign Size</span>
+          <strong class="metric-card__value" id="meta-world-count">0 Worlds</strong>
+        </article>
+      </div>
+    </header>
+
+    <nav class="page-nav panel" aria-label="Primary navigation">
+      <div class="page-nav__tabs">
+        <button class="page-nav__button is-active" type="button" data-action="set-page" data-page="overview">Overview</button>
+        <button class="page-nav__button" type="button" data-action="set-page" data-page="route">Route</button>
+        <button class="page-nav__button" type="button" data-action="set-page" data-page="settings">Settings</button>
+      </div>
+      <button class="button" type="button" data-action="open-setup">Rebuild Route</button>
+    </nav>
+
+    <main class="page-stack">
+      <section class="page" id="page-overview" data-page="overview">
+        <div class="overview-layout">
+          <section class="objective-card panel" id="objective-card" aria-live="polite"></section>
+
+          <aside class="summary-panel panel">
+            <div class="panel-heading panel-heading--compact">
+              <div>
+                <p class="panel-heading__kicker">Workspace Guide</p>
+                <h2>How To Use It</h2>
+              </div>
+            </div>
+            <p class="summary-panel__copy">
+              Overview keeps the active target and progress front and center. Route opens the full ladder one world at a time. Settings holds themes, save tools, and source links.
+            </p>
+            <div class="summary-panel__items">
+              <article class="summary-panel__item">
+                <span class="summary-panel__label">Overview</span>
+                <strong>See what to play next.</strong>
+              </article>
+              <article class="summary-panel__item">
+                <span class="summary-panel__label">Route</span>
+                <strong>Inspect the campaign in detail.</strong>
+              </article>
+              <article class="summary-panel__item">
+                <span class="summary-panel__label">Settings</span>
+                <strong>Manage theme, setup, and saves.</strong>
+              </article>
+            </div>
+            <div class="summary-panel__actions">
+              <button class="button" type="button" data-action="set-page" data-page="route">Open Route</button>
+              <button class="button button--ghost" type="button" data-action="set-page" data-page="settings">Open Settings</button>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="page" id="page-route" data-page="route" hidden>
+        <div class="route-layout">
+          <aside class="route-sidebar panel">
+            <div class="panel-heading panel-heading--compact">
+              <div>
+                <p class="panel-heading__kicker">Worlds</p>
+                <h2>Route Navigator</h2>
+              </div>
+            </div>
+            <p class="route-sidebar__copy">
+              Pick a world to inspect it. The page keeps one world open at a time so the route stays readable.
+            </p>
+            <nav class="world-nav" id="world-nav" aria-label="Campaign worlds"></nav>
+          </aside>
+
+          <section class="route-content">
+            <section class="route-toolbar panel" id="route-toolbar" aria-live="polite"></section>
+            <section class="campaign" id="campaign" aria-live="polite"></section>
+          </section>
+        </div>
+      </section>
+
+      <section class="page" id="page-settings" data-page="settings" hidden>
+        <div class="settings-grid">
+          <section class="theme-panel panel">
+            <div class="panel-heading panel-heading--compact">
+              <div>
+                <p class="panel-heading__kicker">Theme</p>
+                <h2>Visual Style</h2>
+              </div>
+            </div>
+            <div class="theme-switcher" id="theme-switcher" aria-label="App themes"></div>
+          </section>
+
+          <section class="action-panel panel">
+            <div class="panel-heading panel-heading--compact">
+              <div>
+                <p class="panel-heading__kicker">Route Tools</p>
+                <h2>Save And Setup</h2>
+              </div>
+            </div>
+            <div class="action-panel__buttons">
+              <button class="button button--ghost" id="retake-setup" type="button">Retake Setup</button>
+              <button class="button button--ghost" id="export-save" type="button">Export Save</button>
+              <button class="button button--ghost" id="import-save" type="button">Import Save</button>
+              <button class="button button--danger" id="reset-save" type="button">Reset Save</button>
+            </div>
+          </section>
+
+          <section class="audit-panel panel" id="audit-panel" aria-live="polite"></section>
+
+          <section class="history-panel panel" id="history-panel" aria-live="polite"></section>
+
+          <section class="sources-panel panel">
+            <div class="panel-heading panel-heading--compact">
+              <div>
+                <p class="panel-heading__kicker">Sources</p>
+                <h2>Reference Links</h2>
+              </div>
+            </div>
+            <p class="sources-panel__copy">
+              Level pages still point to GDBrowser, and the route research stays anchored to Demon Progression, GDDP philosophy, and current high-end list landmarks checked on March 21, 2026.
+            </p>
+            <div class="footer__links">
+              <a href="https://gdbrowser.com/" target="_blank" rel="noreferrer">GDBrowser</a>
+              <a href="https://sites.google.com/view/demonprogression/home" target="_blank" rel="noreferrer">Demon Progression</a>
+              <a href="https://gddp.pro/" target="_blank" rel="noreferrer">GDDP</a>
+              <a href="https://aredl.net/" target="_blank" rel="noreferrer">AREDL</a>
+              <a href="https://pointercrate.com/demonlist" target="_blank" rel="noreferrer">Pointercrate</a>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer panel">
+      <p class="section-kicker">Notes</p>
+      <p class="footer__copy">
+        Published account names are shown directly from the linked level pages. The route page contains the same world and level detail as before, but split away from setup and theme controls so the climb is easier to read.
+      </p>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <div class="setup-overlay" id="setup-overlay" hidden></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
