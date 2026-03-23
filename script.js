@@ -13,6 +13,14 @@ const PAGE_TITLES = {
   route: "Route",
   settings: "Settings",
 };
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
 const DEFAULT_PROFILE = {
   hardest: "new-player",
   mainGoal: "balanced-growth",
@@ -1347,6 +1355,10 @@ let currentPage = state.page || "overview";
 let routeSearchQuery = "";
 const undoStack = [];
 let deferredInstallPrompt = null;
+let lastFocusedElementBeforeSetup = null;
+let shouldRefocusRouteSearch = false;
+let routeSearchSelectionStart = null;
+let routeSearchSelectionEnd = null;
 
 function currentProfileFallback() {
   return state?.profile || DEFAULT_PROFILE;
@@ -1361,6 +1373,7 @@ if (routeData.preparedWorlds.some((world) => world.id === initialUrlState.worldI
 }
 
 const elements = {
+  mainContent: document.getElementById("main-content"),
   objectiveCard: document.getElementById("objective-card"),
   worldNav: document.getElementById("world-nav"),
   campaign: document.getElementById("campaign"),
@@ -1462,6 +1475,10 @@ function applyTheme(themeId) {
 
 function normalizePage(pageId) {
   return ["overview", "route", "settings"].includes(pageId) ? pageId : "overview";
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function readUrlState() {
@@ -1583,9 +1600,20 @@ function syncPages() {
   elements.pages.forEach((page) => {
     const isActive = page.dataset.page === currentPage;
     page.hidden = !isActive;
+    page.setAttribute("aria-hidden", String(!isActive));
+    if ("inert" in page) {
+      page.inert = !isActive;
+    }
   });
   elements.pageButtons.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.page === currentPage);
+    const isActive = button.dataset.page === currentPage;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+    if (isActive) {
+      button.setAttribute("aria-current", "page");
+    } else {
+      button.removeAttribute("aria-current");
+    }
   });
 }
 
@@ -1608,6 +1636,9 @@ function resetSetupDraft() {
 }
 
 function openSetup() {
+  if (document.activeElement instanceof HTMLElement) {
+    lastFocusedElementBeforeSetup = document.activeElement;
+  }
   resetSetupDraft();
   setupOpen = true;
   render();
@@ -1622,6 +1653,11 @@ function closeSetup() {
   };
   applyTheme(state.theme);
   render();
+  if (lastFocusedElementBeforeSetup instanceof HTMLElement) {
+    window.requestAnimationFrame(() => {
+      lastFocusedElementBeforeSetup?.focus({ preventScroll: true });
+    });
+  }
 }
 
 function undoLastChange() {
@@ -1762,10 +1798,116 @@ function showToast(message) {
   }, 2600);
 }
 
+function getSetupDialog() {
+  return elements.setupOverlay.querySelector("[data-setup-dialog]");
+}
+
+function getFocusableElements(root) {
+  return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter((element) => {
+    if (!(element instanceof HTMLElement)) {
+      return false;
+    }
+    if (element.hidden) {
+      return false;
+    }
+    return element.offsetParent !== null || element === document.activeElement;
+  });
+}
+
+function syncSetupFocus() {
+  if (!setupOpen) {
+    return;
+  }
+
+  const dialog = getSetupDialog();
+  if (!(dialog instanceof HTMLElement)) {
+    return;
+  }
+
+  if (document.activeElement instanceof HTMLElement && dialog.contains(document.activeElement)) {
+    return;
+  }
+
+  const stepConfig = SETUP_STEPS[setupStep];
+  const selectedValue = stepConfig.key === "theme" ? setupDraft.theme : setupDraft[stepConfig.key];
+  const selectedOption = dialog.querySelector(
+    `[data-action="setup-select"][data-field="${stepConfig.key}"][data-value="${selectedValue}"]`,
+  );
+  const fallback = selectedOption
+    || dialog.querySelector('[data-action="setup-select"]')
+    || dialog.querySelector('[data-action="setup-next"], [data-action="setup-finish"], [data-action="close-setup"]')
+    || dialog;
+
+  if (fallback instanceof HTMLElement) {
+    fallback.focus({ preventScroll: true });
+  }
+}
+
+function handleSetupKeydown(event) {
+  if (!setupOpen) {
+    return;
+  }
+
+  const dialog = getSetupDialog();
+  if (!(dialog instanceof HTMLElement)) {
+    return;
+  }
+
+  if (event.key === "Escape" && state.profile) {
+    event.preventDefault();
+    closeSetup();
+    return;
+  }
+
+  if (event.key !== "Tab") {
+    return;
+  }
+
+  const focusable = getFocusableElements(dialog);
+  if (!focusable.length) {
+    event.preventDefault();
+    dialog.focus({ preventScroll: true });
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus({ preventScroll: true });
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus({ preventScroll: true });
+  }
+}
+
+function restoreRouteSearchFocus() {
+  if (!shouldRefocusRouteSearch) {
+    return;
+  }
+
+  shouldRefocusRouteSearch = false;
+  const input = document.getElementById("route-search");
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+
+  input.focus({ preventScroll: true });
+  if (typeof routeSearchSelectionStart === "number" && typeof routeSearchSelectionEnd === "number") {
+    input.setSelectionRange(routeSearchSelectionStart, routeSearchSelectionEnd);
+  }
+}
+
 function jumpToElement(id) {
   const element = document.getElementById(id);
   if (element) {
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!element.hasAttribute("tabindex")) {
+      element.setAttribute("tabindex", "-1");
+    }
+    element.focus({ preventScroll: true });
+    element.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
   }
 }
 
@@ -2037,7 +2179,14 @@ function renderBiomeVars(biome) {
 
 function renderThemeSwitcher() {
   elements.themeSwitcher.innerHTML = THEMES.map((theme) => `
-    <button class="theme-button${state.theme === theme.id ? " is-active" : ""}" type="button" data-action="set-theme" data-theme="${theme.id}">
+    <button
+      class="theme-button${state.theme === theme.id ? " is-active" : ""}"
+      type="button"
+      data-action="set-theme"
+      data-theme="${theme.id}"
+      aria-pressed="${state.theme === theme.id}"
+      aria-label="Use ${escapeHtml(theme.label)} theme"
+    >
       <span class="theme-button__swatch" style="background: linear-gradient(90deg, ${theme.colors.join(", ")});"></span>
       <span class="theme-button__copy">
         <span class="theme-button__label">${escapeHtml(theme.label)}</span>
@@ -2083,7 +2232,14 @@ const SETUP_STEPS = [
 function renderSetupOption(option, field, selectedValue, extra = "") {
   const isSelected = selectedValue === option.id;
   return `
-    <button class="setup-option${isSelected ? " is-selected" : ""}" type="button" data-action="setup-select" data-field="${field}" data-value="${option.id}">
+    <button
+      class="setup-option${isSelected ? " is-selected" : ""}"
+      type="button"
+      data-action="setup-select"
+      data-field="${field}"
+      data-value="${option.id}"
+      aria-pressed="${isSelected}"
+    >
       <span class="setup-option__body">
         ${extra}
         <strong class="setup-option__title">${escapeHtml(option.title)}</strong>
@@ -2126,12 +2282,12 @@ function renderSetupOverlay() {
 
   elements.setupOverlay.hidden = false;
   elements.setupOverlay.innerHTML = `
-    <div class="setup-card setup-card--wizard">
+    <div class="setup-card setup-card--wizard" role="dialog" aria-modal="true" aria-labelledby="setup-title" aria-describedby="setup-copy" tabindex="-1" data-setup-dialog>
       <div class="setup-shell">
         <aside class="setup-panel">
           <p class="eyebrow">Journey Builder</p>
-          <h2 class="setup-card__title">Build a route that actually fits where you are right now.</h2>
-          <p class="setup-card__copy">
+          <h2 class="setup-card__title" id="setup-title">Build a route that actually fits where you are right now.</h2>
+          <p class="setup-card__copy" id="setup-copy">
             This setup uses your current skill, your main goal, your skill bias, and your preferred grind length to rebuild the campaign with the optimizer instead of a fixed preset ladder.
           </p>
           <div class="setup-progress">
@@ -2199,6 +2355,7 @@ function renderStatusPicker(options, currentStatus, action, dataAttribute, value
           data-action="${action}"
           ${dataAttribute}="${escapeHtml(String(value))}"
           data-status="${option.id}"
+          aria-pressed="${currentStatus === option.id}"
         >
           ${escapeHtml(option.label)}
         </button>
@@ -2367,13 +2524,14 @@ function renderRouteToolbar() {
     </div>
     <div class="route-search">
       <label class="route-search__label" for="route-search">Quick Jump</label>
-      <input class="route-search__input" id="route-search" type="search" value="${escapeHtml(routeSearchQuery)}" placeholder="Search by level, creator, ID, difficulty, or world">
-      <div class="route-search__results">
+      <p class="visually-hidden" id="route-search-help">Search by level name, creator, ID, difficulty, or world title, then open a result to jump directly to it.</p>
+      <input class="route-search__input" id="route-search" type="search" value="${escapeHtml(routeSearchQuery)}" placeholder="Search by level, creator, ID, difficulty, or world" aria-describedby="route-search-help" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <div class="route-search__results" aria-live="polite">
         ${
           routeSearchQuery.trim()
             ? searchResults.length
               ? searchResults.map((result) => `
-                <button class="route-search__result" type="button" data-action="jump-node" data-world-id="${result.worldId}" data-target-id="${result.targetId}">
+                <button class="route-search__result" type="button" data-action="jump-node" data-world-id="${result.worldId}" data-target-id="${result.targetId}" aria-label="Jump to ${escapeHtml(result.title)}">
                   <span class="route-search__result-kind">${escapeHtml(result.kind)}</span>
                   <span class="route-search__result-copy">
                     <strong>${escapeHtml(result.title)}</strong>
@@ -2387,6 +2545,7 @@ function renderRouteToolbar() {
       </div>
     </div>
   `;
+  restoreRouteSearchFocus();
 }
 
 function renderAuditPanel() {
@@ -2607,7 +2766,15 @@ function renderWorldNav() {
     }
 
     return `
-      <button class="world-nav__button${world.id === selectedWorld.id ? " is-active" : ""}" type="button" data-action="jump-world" data-world-id="${world.id}" style="${renderBiomeVars(biome)}">
+      <button
+        class="world-nav__button${world.id === selectedWorld.id ? " is-active" : ""}"
+        type="button"
+        data-action="jump-world"
+        data-world-id="${world.id}"
+        style="${renderBiomeVars(biome)}"
+        aria-pressed="${world.id === selectedWorld.id}"
+        aria-label="Open ${escapeHtml(world.worldLabel)} ${escapeHtml(world.navTitle)}. ${mainClears} of ${world.levels.length} main levels cleared."
+      >
         <span class="world-nav__index">World ${world.worldNumber}</span>
         <span class="world-nav__copy">
           <span class="world-nav__title">${escapeHtml(world.navTitle)}</span>
@@ -2876,6 +3043,7 @@ function render() {
   renderAuditPanel();
   renderHistoryPanel();
   renderSetupOverlay();
+  syncSetupFocus();
   syncAppBranding();
 }
 
@@ -2887,9 +3055,16 @@ document.addEventListener("click", (event) => {
 
   const { action } = actionTarget.dataset;
   if (action === "set-page") {
-    currentPage = normalizePage(actionTarget.dataset.page);
+    const nextPage = normalizePage(actionTarget.dataset.page);
+    const didChangePage = nextPage !== currentPage;
+    currentPage = nextPage;
     saveState();
     render();
+    if (didChangePage) {
+      window.requestAnimationFrame(() => {
+        elements.mainContent?.focus({ preventScroll: true });
+      });
+    }
     return;
   }
   if (action === "clear-main") {
@@ -3020,8 +3195,15 @@ elements.installApp?.addEventListener("click", () => {
 document.addEventListener("input", (event) => {
   if (event.target instanceof HTMLInputElement && event.target.id === "route-search") {
     routeSearchQuery = event.target.value;
+    shouldRefocusRouteSearch = true;
+    routeSearchSelectionStart = event.target.selectionStart;
+    routeSearchSelectionEnd = event.target.selectionEnd;
     renderRouteToolbar();
   }
+});
+
+document.addEventListener("keydown", (event) => {
+  handleSetupKeydown(event);
 });
 
 importInput.addEventListener("change", async (event) => {
