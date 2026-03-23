@@ -7,6 +7,12 @@ const DEFAULT_THEME = "arcade";
 const ACTIVITY_LIMIT = 18;
 const UNDO_LIMIT = 12;
 const DATA_STALE_DAYS = 60;
+const APP_NAME = "GD Route Planner";
+const PAGE_TITLES = {
+  overview: "Overview",
+  route: "Route",
+  settings: "Settings",
+};
 const DEFAULT_PROFILE = {
   hardest: "new-player",
   mainGoal: "balanced-growth",
@@ -1340,9 +1346,18 @@ let toastTimer = null;
 let currentPage = state.page || "overview";
 let routeSearchQuery = "";
 const undoStack = [];
+let deferredInstallPrompt = null;
 
 function currentProfileFallback() {
   return state?.profile || DEFAULT_PROFILE;
+}
+
+const initialUrlState = readUrlState();
+if (initialUrlState.page) {
+  currentPage = initialUrlState.page;
+}
+if (routeData.preparedWorlds.some((world) => world.id === initialUrlState.worldId)) {
+  state.selectedWorldId = initialUrlState.worldId;
 }
 
 const elements = {
@@ -1361,6 +1376,7 @@ const elements = {
   metaRouteMode: document.getElementById("meta-route-mode"),
   metaThemeLabel: document.getElementById("meta-theme-label"),
   themeSwitcher: document.getElementById("theme-switcher"),
+  installApp: document.getElementById("install-app"),
   exportSave: document.getElementById("export-save"),
   importSave: document.getElementById("import-save"),
   resetSave: document.getElementById("reset-save"),
@@ -1370,6 +1386,7 @@ const elements = {
   routeToolbar: document.getElementById("route-toolbar"),
   auditPanel: document.getElementById("audit-panel"),
   historyPanel: document.getElementById("history-panel"),
+  themeColorMeta: document.querySelector('meta[name="theme-color"]'),
   pages: Array.from(document.querySelectorAll(".page")),
   pageButtons: Array.from(document.querySelectorAll(".page-nav__button[data-page]")),
 };
@@ -1445,6 +1462,97 @@ function applyTheme(themeId) {
 
 function normalizePage(pageId) {
   return ["overview", "route", "settings"].includes(pageId) ? pageId : "overview";
+}
+
+function readUrlState() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    page: params.has("page") ? normalizePage(params.get("page")) : null,
+    worldId: params.get("world"),
+  };
+}
+
+function getPageTitle(pageId) {
+  const page = normalizePage(pageId);
+  return page === "overview" ? APP_NAME : `${PAGE_TITLES[page]} | ${APP_NAME}`;
+}
+
+function isStandaloneMode() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function syncThemeColorMeta() {
+  const color = getComputedStyle(document.body).getPropertyValue("--bg-elevated").trim()
+    || getComputedStyle(document.body).getPropertyValue("--bg").trim()
+    || "#0b1220";
+  elements.themeColorMeta?.setAttribute("content", color);
+}
+
+function syncInstallButton() {
+  if (!elements.installApp) {
+    return;
+  }
+
+  const available = Boolean(deferredInstallPrompt) && !isStandaloneMode();
+  elements.installApp.hidden = !available;
+  elements.installApp.disabled = !available;
+}
+
+function syncUrlState() {
+  const url = new URL(window.location.href);
+  if (currentPage === "overview") {
+    url.searchParams.delete("page");
+  } else {
+    url.searchParams.set("page", currentPage);
+  }
+
+  const selectedWorld = getSelectedWorld();
+  if (currentPage === "route" && selectedWorld?.id) {
+    url.searchParams.set("world", selectedWorld.id);
+  } else {
+    url.searchParams.delete("world");
+  }
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl !== currentUrl) {
+    window.history.replaceState({}, "", nextUrl);
+  }
+}
+
+function syncAppBranding() {
+  document.title = getPageTitle(currentPage);
+  syncThemeColorMeta();
+  syncInstallButton();
+  syncUrlState();
+}
+
+async function promptInstall() {
+  if (isStandaloneMode()) {
+    showToast(`${APP_NAME} is already installed.`);
+    return;
+  }
+
+  if (!deferredInstallPrompt) {
+    showToast("Install is available from Chrome once the browser offers the app prompt.");
+    return;
+  }
+
+  const installPrompt = deferredInstallPrompt;
+  deferredInstallPrompt = null;
+  syncInstallButton();
+  await installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => null);
+}
+
+function registerAppShell() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }, { once: true });
 }
 
 function cloneStateSnapshot() {
@@ -2768,6 +2876,7 @@ function render() {
   renderAuditPanel();
   renderHistoryPanel();
   renderSetupOverlay();
+  syncAppBranding();
 }
 
 document.addEventListener("click", (event) => {
@@ -2904,6 +3013,9 @@ elements.exportSave.addEventListener("click", downloadSave);
 elements.importSave.addEventListener("click", () => importInput.click());
 elements.resetSave.addEventListener("click", resetProgress);
 elements.retakeSetup.addEventListener("click", openSetup);
+elements.installApp?.addEventListener("click", () => {
+  void promptInstall();
+});
 
 document.addEventListener("input", (event) => {
   if (event.target instanceof HTMLInputElement && event.target.id === "route-search") {
@@ -2922,4 +3034,26 @@ importInput.addEventListener("change", async (event) => {
   importSaveFromText(text);
 });
 
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  syncInstallButton();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  syncInstallButton();
+  showToast(`${APP_NAME} installed.`);
+});
+
+window.addEventListener("popstate", () => {
+  const nextUrlState = readUrlState();
+  currentPage = nextUrlState.page || state.page || "overview";
+  if (routeData.preparedWorlds.some((world) => world.id === nextUrlState.worldId)) {
+    state.selectedWorldId = nextUrlState.worldId;
+  }
+  render();
+});
+
+registerAppShell();
 render();

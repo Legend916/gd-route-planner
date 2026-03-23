@@ -8,6 +8,27 @@
     name="description"
     content="Build an optimized Geometry Dash route from your current skill level to the top."
   >
+  <meta name="application-name" content="GD Route Planner">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GD Route Planner">
+  <meta property="og:title" content="GD Route Planner">
+  <meta property="og:description" content="Build an optimized Geometry Dash route from your current skill level to the top.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://gdrouteplanner.com/assets/og-card.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="GD Route Planner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="GD Route Planner">
+  <meta name="twitter:description" content="Build an optimized Geometry Dash route from your current skill level to the top.">
+  <meta name="twitter:image" content="https://gdrouteplanner.com/assets/og-card.png">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="alternate icon" type="image/png" href="assets/icon-32.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -20,12 +41,19 @@
   <div class="app-shell">
     <header class="app-header panel">
       <div class="app-header__top">
-        <div class="app-header__copy">
-          <p class="section-kicker">Geometry Dash</p>
-          <h1>GD Route Planner</h1>
-          <p class="app-header__lede">
-            Build an optimized path from your current skill level to the top.
-          </p>
+        <div class="brand-lockup">
+          <img class="brand-lockup__mark" src="assets/logo-mark.svg" alt="GD Route Planner logo" width="72" height="72">
+          <div class="app-header__copy">
+            <p class="section-kicker">Geometry Dash</p>
+            <h1>GD Route Planner</h1>
+            <p class="app-header__lede">
+              Build an optimized path from your current skill level to the top.
+            </p>
+            <div class="brand-lockup__meta">
+              <span class="brand-chip">Adaptive route optimizer</span>
+              <span class="brand-chip brand-chip--soft">Built to feel like a tool</span>
+            </div>
+          </div>
         </div>
         <div class="app-header__signals">
           <span class="signal">Route v4.0</span>
@@ -78,7 +106,10 @@
         <button class="page-nav__button" type="button" data-action="set-page" data-page="route">Route</button>
         <button class="page-nav__button" type="button" data-action="set-page" data-page="settings">Settings</button>
       </div>
-      <button class="button" type="button" data-action="open-setup">Rebuild Route</button>
+      <div class="page-nav__actions">
+        <button class="button button--ghost" id="install-app" type="button" hidden>Install App</button>
+        <button class="button" type="button" data-action="open-setup">Rebuild Route</button>
+      </div>
     </nav>
 
     <main class="page-stack">
@@ -194,10 +225,15 @@
     </main>
 
     <footer class="footer panel">
-      <p class="section-kicker">Notes</p>
-      <p class="footer__copy">
-        Published account names are shown directly from the linked level pages. The route page contains the same world and level detail as before, but split away from setup and theme controls so the climb is easier to read.
-      </p>
+      <div class="footer__brand">
+        <img class="footer__mark" src="assets/logo-mark.svg" alt="" width="40" height="40">
+        <div>
+          <p class="section-kicker">GD Route Planner</p>
+          <p class="footer__copy">
+            Published account names are shown directly from the linked level pages. The route page contains the same world and level detail as before, but split away from setup and theme controls so the climb is easier to read.
+          </p>
+        </div>
+      </div>
     </footer>
   </div>
 

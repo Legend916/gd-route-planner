@@ -79,6 +79,7 @@ body[data-theme="frost"] {
 
 html {
   scroll-behavior: smooth;
+  color-scheme: dark;
 }
 
 body {
@@ -282,13 +283,77 @@ span {
 .app-header {
   display: grid;
   gap: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.app-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: min(420px, 72%);
+  height: 220px;
+  background:
+    radial-gradient(circle at top left, rgba(104, 211, 255, 0.2), transparent 58%),
+    linear-gradient(135deg, rgba(255, 214, 110, 0.12), transparent 72%);
+  pointer-events: none;
 }
 
 .app-header__top {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.brand-lockup__mark,
+.footer__mark {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.footer__mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.brand-lockup__meta {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.brand-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(104, 211, 255, 0.28);
+  background: rgba(104, 211, 255, 0.12);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.brand-chip--soft {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
 }
 
 .app-header__copy h1 {
@@ -390,6 +455,12 @@ span {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.page-nav__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .page-nav__tabs {
@@ -1056,6 +1127,12 @@ span {
   gap: 10px;
 }
 
+.footer__brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
 .footer__links a {
   color: var(--accent);
 }
@@ -1180,6 +1257,19 @@ span {
   .route-toolbar__top {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .brand-lockup {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .page-nav__actions {
+    width: 100%;
+  }
+
+  .page-nav__actions .button {
+    flex: 1 1 0;
   }
 
   .stats-grid,
