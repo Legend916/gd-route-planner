@@ -54,7 +54,7 @@ const PROFILE_QUESTIONS = {
   hardest: {
     label: "Where are you at right now?",
     options: [
-      { id: "new-player", title: "New Player", description: "I am still learning online levels and first demons." },
+      { id: "new-player", title: "New Player", description: "I am still learning official levels, easy online maps, and core controls." },
       { id: "easy-demon", title: "Easy Demon", description: "I can clear easy demons but need a fuller base." },
       { id: "medium-demon", title: "Medium Demon", description: "Medium demons are my current lane." },
       { id: "hard-demon", title: "Hard Demon", description: "I can beat hard demons and want to climb cleanly." },
@@ -97,12 +97,12 @@ const PROFILE_QUESTIONS = {
 
 const START_WORLD_BY_HARDEST = {
   "new-player": 0,
-  "easy-demon": 1,
-  "medium-demon": 3,
-  "hard-demon": 4,
-  "insane-demon": 5,
-  "extreme-demon": 6,
-  "list-ready": 8,
+  "easy-demon": 3,
+  "medium-demon": 5,
+  "hard-demon": 6,
+  "insane-demon": 7,
+  "extreme-demon": 8,
+  "list-ready": 10,
 };
 
 const LENGTH_SETTINGS = {
@@ -209,7 +209,7 @@ const BONUS_PROGRESS_OPTIONS = [
   { id: "cleared", label: "Cleared" },
 ];
 
-function levelMeta(name, creator, levelId, difficulty, stars, length) {
+function levelMeta(name, creator, levelId, difficulty, stars, length, extra = {}) {
   return {
     name,
     creator,
@@ -217,8 +217,15 @@ function levelMeta(name, creator, levelId, difficulty, stars, length) {
     difficulty,
     stars,
     length,
-    levelUrl: `https://gdbrowser.com/${levelId}`,
+    levelUrl: extra.levelUrl || `https://gdbrowser.com/${levelId}`,
+    ...extra,
   };
+}
+
+function officialLevelMeta(name, slug, order, difficulty, stars, length = "Long") {
+  return levelMeta(name, "RobTop", `OL-${String(order).padStart(2, "0")}`, difficulty, stars, length, {
+    levelUrl: `https://geometry-dash.fandom.com/wiki/${slug}`,
+  });
 }
 
 function mainStep(metaKey, reason, skills, extra = {}) {
@@ -251,6 +258,23 @@ function normalizeText(value) {
 }
 
 const LEVEL_META = {
+  stereoMadness: officialLevelMeta("Stereo Madness", "Stereo_Madness", 1, "Easy", 1),
+  backOnTrack: officialLevelMeta("Back On Track", "Back_On_Track", 2, "Easy", 2),
+  polargeist: officialLevelMeta("Polargeist", "Polargeist", 3, "Normal", 3),
+  dryOut: officialLevelMeta("Dry Out", "Dry_Out", 4, "Hard", 4),
+  baseAfterBase: officialLevelMeta("Base After Base", "Base_After_Base", 5, "Hard", 5),
+  cantLetGo: officialLevelMeta("Can't Let Go", "Can%27t_Let_Go", 6, "Harder", 6),
+  jumper: officialLevelMeta("Jumper", "Jumper", 7, "Harder", 7),
+  timeMachine: officialLevelMeta("Time Machine", "Time_Machine", 8, "Harder", 8),
+  cycles: officialLevelMeta("Cycles", "Cycles", 9, "Hard", 9),
+  xStep: officialLevelMeta("xStep", "Xstep", 10, "Harder", 10),
+  clutterfunk: officialLevelMeta("Clutterfunk", "Clutterfunk", 11, "Harder", 11),
+  theoryOfEverything: officialLevelMeta("Theory of Everything", "Theory_of_Everything", 12, "Insane", 12),
+  electromanAdventures: officialLevelMeta("Electroman Adventures", "Electroman_Adventures", 13, "Insane", 13),
+  hexagonForce: officialLevelMeta("Hexagon Force", "Hexagon_Force", 14, "Harder", 14),
+  blastProcessing: officialLevelMeta("Blast Processing", "Blast_Processing", 15, "Harder", 15),
+  geometricalDominator: officialLevelMeta("Geometrical Dominator", "Geometrical_Dominator", 16, "Harder", 16),
+  retray: levelMeta("ReTraY", "BoyOfTheCones", 6508283, "Easy", 3, "Short"),
   darkParadise: levelMeta("Dark Paradise", "Roli GD", 11280109, "Easy", 2, "Long"),
   amplification: levelMeta("Amplification", "Berkoo", 20635816, "Hard", 5, "Long"),
   slam: levelMeta("Slam", "XronoM", 22018994, "Harder", 7, "Long"),
@@ -452,21 +476,60 @@ const LEVEL_META = {
 
 const BASE_WORLDS = [
   {
+    id: "official-foundations",
+    navTitle: "Official Start",
+    title: "Official Foundations",
+    gate: "First Launch Arc",
+    description:
+      "This opening world is for players who have barely touched Geometry Dash or have never played before. It uses RobTop's official early levels to teach jumping, gravity, ship basics, and simple rhythm without any demon pressure.",
+    sourceLabel: "Official Geometry Dash level route",
+    sourceUrl: "https://geometry-dash.fandom.com/wiki/Official_Levels",
+    levels: [
+      mainStep("stereoMadness", "Start on the very first official level and learn basic jump timing with no extra gimmicks.", ["Basic jumps", "Ground timing"]),
+      mainStep("backOnTrack", "Repeat those basics with slightly denser obstacles until simple timing feels automatic.", ["Jump timing", "Consistency"]),
+      mainStep("polargeist", "Add early orb timing and faster pace without overwhelming the read.", ["Orb timing", "Read speed"]),
+      mainStep("dryOut", "Introduce gravity shifts and the first true ship sections in a controlled setting.", ["Gravity swaps", "Ship basics"]),
+      mainStep("baseAfterBase", "Stabilize cube and ship control on a friendlier official pace before the tighter levels.", ["Cube control", "Ship control"]),
+      mainStep("cantLetGo", "Build confidence with tighter official jumps and less empty space to recover.", ["Jump discipline", "Reaction control"]),
+      mainStep("jumper", "Raise pace and staircase reading before the first real timing wall.", ["Pace control", "Read discipline"]),
+      mainStep("timeMachine", "World boss: clear the first spike-heavy official wall and prove the core controls are settling in.", ["Triple spikes", "Nerves"], { milestone: "Official start clear" }),
+    ],
+  },
+  {
+    id: "official-bridge",
+    navTitle: "Official Bridge",
+    title: "Official Bridge",
+    gate: "Before Online Levels",
+    description:
+      "Keep climbing through harder official levels before touching the online route. This world bridges beginners into faster inputs, denser mode changes, and the first memory-heavy reads while everything still stays below demon difficulty.",
+    sourceLabel: "Official Geometry Dash level bridge",
+    sourceUrl: "https://geometry-dash.fandom.com/wiki/Official_Levels",
+    levels: [
+      mainStep("cycles", "Start the bridge with more active orb timing and slightly faster rhythm.", ["Orb timing", "Rhythm control"]),
+      mainStep("xStep", "Practice repeated portals and steadier pattern memory through a full official run.", ["Portal transitions", "Pattern memory"]),
+      mainStep("clutterfunk", "Push into tighter ship and cube timing without asking for demon-level precision yet.", ["Ship control", "Tight timings"]),
+      mainStep("theoryOfEverything", "Train cleaner mixed gameplay and momentum changes on a famous official benchmark.", ["Mixed gameplay", "Momentum"]),
+      mainStep("electromanAdventures", "Build flow and recover faster from awkward late jump nerves.", ["Flow", "Recovery"]),
+      mainStep("hexagonForce", "Introduce dual awareness and trickier mode changes in a safer setting than online demons.", ["Dual awareness", "Mode changes"]),
+      mainStep("blastProcessing", "Practice faster rhythm and wave-style motion before moving into online routes.", ["Speed changes", "Rhythm"]),
+      mainStep("geometricalDominator", "World boss: finish the official on-ramp with memory, speed, and modern presentation pressure.", ["Memory", "Visual reads"], { milestone: "Official bridge clear" }),
+    ],
+  },
+  {
     id: "browser-foundations",
-    navTitle: "Foundations",
+    navTitle: "Online Start",
     title: "Browser Foundations",
     gate: "Starter Arc",
     description:
-      "Start on real rated online levels before the first demon gate. This world teaches movement control without throwing new players straight into legacy demons.",
+      "Now move into rated online levels without jumping straight to demons. This world keeps the pressure low while introducing community-made pacing, friendlier visual reads, and the first real non-official level habits.",
     sourceLabel: "Exact level pages verified on GDBrowser",
     sourceUrl: "https://gdbrowser.com/",
     levels: [
-      mainStep("darkParadise", "Start with simple cube flow and low-pressure online level pacing.", ["Cube pacing", "Jump timing"]),
-      mainStep("amplification", "Bridge into longer harder gameplay and cleaner rhythm-based clicks.", ["Rhythm control", "Consistency"]),
+      mainStep("retray", "Start online with a very forgiving rated level that keeps the read clean and the clicks simple.", ["Basic jumps", "Online pacing"]),
+      mainStep("darkParadise", "Bridge into longer easy-rated gameplay with calmer cube flow.", ["Cube pacing", "Jump timing"]),
+      mainStep("amplification", "Move into longer harder gameplay and cleaner rhythm-based clicks.", ["Rhythm control", "Consistency"]),
       mainStep("slam", "Sharpen ship control and quick click changes on safer terrain.", ["Ship control", "Micro-adjustments"]),
-      mainStep("fireAura", "Classic harder gauntlet that rewards steadier timings and composure.", ["Timings", "Nerve control"]),
-      mainStep("dreamFlower", "First approachable easy demon with flow-heavy modern gameplay.", ["Flow control", "Long-form focus"]),
-      mainStep("rutaDelSol", "World boss: finish the warmup arc with an XL easy demon run.", ["Demon stamina", "Consistency"], { milestone: "Starter world clear" }),
+      mainStep("fireAura", "World boss: close the online starter arc with a classic harder gauntlet that rewards composure.", ["Timings", "Nerve control"], { milestone: "Online foundations clear" }),
     ],
   },
   {
@@ -479,6 +542,8 @@ const BASE_WORLDS = [
     sourceLabel: "Demon Progression first demon route",
     sourceUrl: "https://sites.google.com/view/demonprogression/first-demons",
     levels: [
+      mainStep("dreamFlower", "Take the first approachable modern easy demon after the full official and online warmup.", ["Flow control", "Long-form focus"], { milestone: "First demon attempt lane" }),
+      mainStep("rutaDelSol", "Add an XL beginner demon so early stamina starts building before the classic entries.", ["Demon stamina", "Consistency"]),
       mainStep("theNightmare", "Get the first true easy demon clear and learn to finish a run.", ["First clear nerves", "Legacy pacing"], { milestone: "First easy demon" }),
       mainStep("theLightningRoad", "Follow with another classic entry demon to stabilize confidence.", ["Transition reads", "Legacy timings"]),
       mainStep("shiver", "Move into a cleaner modern easy demon with more readable sync.", ["Sync control", "Intro wave"]),
@@ -829,8 +894,10 @@ const BASE_WORLDS = [
 
 // These are now soft consensus signals, not hard route overrides.
 const COMMUNITY_CURATED_POOLS = {
-  "browser-foundations": ["darkParadise", "amplification", "slam", "fireAura", "dreamFlower", "rutaDelSol"],
-  "first-demon-gate": ["theNightmare", "theLightningRoad", "platinumAdventure", "shiver", "phjork", "playWithFire", "bornSurvivor", "maymory", "absoluteGarbage", "ispy", "speedRacer"],
+  "official-foundations": ["stereoMadness", "backOnTrack", "polargeist", "dryOut", "baseAfterBase", "cantLetGo", "jumper", "timeMachine"],
+  "official-bridge": ["cycles", "xStep", "clutterfunk", "theoryOfEverything", "electromanAdventures", "hexagonForce", "blastProcessing", "geometricalDominator"],
+  "browser-foundations": ["retray", "darkParadise", "amplification", "slam", "fireAura"],
+  "first-demon-gate": ["dreamFlower", "rutaDelSol", "theNightmare", "theLightningRoad", "platinumAdventure", "shiver", "phjork", "playWithFire", "bornSurvivor", "maymory", "absoluteGarbage", "ispy", "speedRacer"],
   "easy-demon-floor": ["xLevel", "deCode", "clubstepDynamix", "crazyBolt", "mirrorForce", "motion", "spark", "submerged", "deathMoon", "problematic", "changeOfScene", "crush", "downUnda", "gloriousFortress", "citadel", "sidestep", "dearNostalgists"],
   "medium-demon-floor": ["bLevel", "goldTemple", "verity", "dorabaeDifficult2", "speedOfLightII", "mechanicalShowdown", "insertCoin", "stellaCirculos", "section", "hell", "badEnding", "oneSpace", "hemi", "sakupenEgg"],
   "hard-demon-core": ["nineCircles", "jawbreaker", "crazy", "doubleDash", "spacelocked", "forsakenNeon", "toeIII", "danceMassacre", "sedulous", "psychosis", "templeOfTime", "futureFunk", "forestTemple"],
@@ -898,6 +965,10 @@ function getSkillOverlap(leftStep, rightStep) {
 
 function getTargetCount(baseWorldIndex, poolLength, profile, role) {
   if (profile.routeLength === "marathon") {
+    return poolLength;
+  }
+
+  if (profile.hardest === "new-player" && baseWorldIndex <= 2) {
     return poolLength;
   }
 
