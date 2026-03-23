@@ -279,8 +279,6 @@ const LEVEL_META = {
   amplification: levelMeta("Amplification", "Berkoo", 20635816, "Hard", 5, "Long"),
   slam: levelMeta("Slam", "XronoM", 22018994, "Harder", 7, "Long"),
   fireAura: levelMeta("Fire Aura", "Sumsar", 4243988, "Harder", 7, "Long"),
-  dreamFlower: levelMeta("Dream flower", "Xender Game", 65227464, "Easy Demon", 10, "XL"),
-  rutaDelSol: levelMeta("Ruta del Sol", "TroxxP1", 83323273, "Easy Demon", 10, "XL"),
   theNightmare: levelMeta("The Nightmare", "Jax", 13519, "Easy Demon", 10, "Long"),
   theLightningRoad: levelMeta("The Lightning Road", "timeless real", 55520, "Easy Demon", 10, "Long"),
   shiver: levelMeta("Shiver", "SpKale", 56210242, "Easy Demon", 10, "Long"),
@@ -542,8 +540,6 @@ const BASE_WORLDS = [
     sourceLabel: "Demon Progression first demon route",
     sourceUrl: "https://sites.google.com/view/demonprogression/first-demons",
     levels: [
-      mainStep("dreamFlower", "Take the first approachable modern easy demon after the full official and online warmup.", ["Flow control", "Long-form focus"], { milestone: "First demon attempt lane" }),
-      mainStep("rutaDelSol", "Add an XL beginner demon so early stamina starts building before the classic entries.", ["Demon stamina", "Consistency"]),
       mainStep("theNightmare", "Get the first true easy demon clear and learn to finish a run.", ["First clear nerves", "Legacy pacing"], { milestone: "First easy demon" }),
       mainStep("theLightningRoad", "Follow with another classic entry demon to stabilize confidence.", ["Transition reads", "Legacy timings"]),
       mainStep("shiver", "Move into a cleaner modern easy demon with more readable sync.", ["Sync control", "Intro wave"]),
@@ -897,7 +893,7 @@ const COMMUNITY_CURATED_POOLS = {
   "official-foundations": ["stereoMadness", "backOnTrack", "polargeist", "dryOut", "baseAfterBase", "cantLetGo", "jumper", "timeMachine"],
   "official-bridge": ["cycles", "xStep", "clutterfunk", "theoryOfEverything", "electromanAdventures", "hexagonForce", "blastProcessing", "geometricalDominator"],
   "browser-foundations": ["retray", "darkParadise", "amplification", "slam", "fireAura"],
-  "first-demon-gate": ["dreamFlower", "rutaDelSol", "theNightmare", "theLightningRoad", "platinumAdventure", "shiver", "phjork", "playWithFire", "bornSurvivor", "maymory", "absoluteGarbage", "ispy", "speedRacer"],
+  "first-demon-gate": ["theNightmare", "theLightningRoad", "platinumAdventure", "shiver", "phjork", "playWithFire", "bornSurvivor", "maymory", "absoluteGarbage", "ispy", "speedRacer"],
   "easy-demon-floor": ["xLevel", "deCode", "clubstepDynamix", "crazyBolt", "mirrorForce", "motion", "spark", "submerged", "deathMoon", "problematic", "changeOfScene", "crush", "downUnda", "gloriousFortress", "citadel", "sidestep", "dearNostalgists"],
   "medium-demon-floor": ["bLevel", "goldTemple", "verity", "dorabaeDifficult2", "speedOfLightII", "mechanicalShowdown", "insertCoin", "stellaCirculos", "section", "hell", "badEnding", "oneSpace", "hemi", "sakupenEgg"],
   "hard-demon-core": ["nineCircles", "jawbreaker", "crazy", "doubleDash", "spacelocked", "forsakenNeon", "toeIII", "danceMassacre", "sedulous", "psychosis", "templeOfTime", "futureFunk", "forestTemple"],
@@ -1428,6 +1424,8 @@ const undoStack = [];
 let deferredInstallPrompt = null;
 let lastFocusedElementBeforeSetup = null;
 let shouldRefocusRouteSearch = false;
+let pendingSetupScrollRestore = null;
+let setupBodyScrollTop = 0;
 let routeSearchSelectionStart = null;
 let routeSearchSelectionEnd = null;
 
@@ -1639,7 +1637,19 @@ function registerAppShell() {
   }
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .catch(() => {});
+
+    if ("caches" in window) {
+      caches.keys()
+        .then((keys) => Promise.all(
+          keys
+            .filter((key) => key.startsWith("gd-route-planner-shell-"))
+            .map((key) => caches.delete(key)),
+        ))
+        .catch(() => {});
+    }
   }, { once: true });
 }
 
@@ -1871,6 +1881,54 @@ function showToast(message) {
 
 function getSetupDialog() {
   return elements.setupOverlay.querySelector("[data-setup-dialog]");
+}
+
+function captureSetupScrollPosition() {
+  if (!setupOpen || !(elements.setupOverlay instanceof HTMLElement)) {
+    return null;
+  }
+
+  const dialog = getSetupDialog();
+  return {
+    overlayTop: elements.setupOverlay.scrollTop,
+    dialogTop: dialog instanceof HTMLElement ? dialog.scrollTop : 0,
+  };
+}
+
+function restoreSetupScrollPosition() {
+  if (!pendingSetupScrollRestore || !setupOpen || !(elements.setupOverlay instanceof HTMLElement)) {
+    pendingSetupScrollRestore = null;
+    return;
+  }
+
+  const { overlayTop, dialogTop } = pendingSetupScrollRestore;
+  pendingSetupScrollRestore = null;
+  window.requestAnimationFrame(() => {
+    elements.setupOverlay.scrollTop = overlayTop;
+    const dialog = getSetupDialog();
+    if (dialog instanceof HTMLElement) {
+      dialog.scrollTop = dialogTop;
+    }
+  });
+}
+
+function syncSetupBodyLock() {
+  if (setupOpen) {
+    if (!document.body.classList.contains("body--setup-open")) {
+      setupBodyScrollTop = window.scrollY;
+      document.body.classList.add("body--setup-open");
+      document.body.style.top = `-${setupBodyScrollTop}px`;
+    }
+    return;
+  }
+
+  if (!document.body.classList.contains("body--setup-open")) {
+    return;
+  }
+
+  document.body.classList.remove("body--setup-open");
+  document.body.style.top = "";
+  window.scrollTo({ top: setupBodyScrollTop, left: 0, behavior: "auto" });
 }
 
 function getFocusableElements(root) {
@@ -3101,8 +3159,11 @@ function renderHeroStats() {
   elements.miniBonusClears.textContent = `${getBonusClearsCount()} / ${routeData.totalBonus} bonus`;
 }
 
-function render() {
+function render(options = {}) {
+  const { preserveSetupScroll = false, syncSetupFocusAfterRender = true } = options;
+  pendingSetupScrollRestore = preserveSetupScroll ? captureSetupScrollPosition() : null;
   document.body.dataset.theme = normalizeTheme(setupOpen ? setupDraft.theme : state.theme);
+  syncSetupBodyLock();
   syncPages();
   normalizeSelectedWorld();
   renderHeroStats();
@@ -3114,7 +3175,10 @@ function render() {
   renderAuditPanel();
   renderHistoryPanel();
   renderSetupOverlay();
-  syncSetupFocus();
+  if (syncSetupFocusAfterRender) {
+    syncSetupFocus();
+  }
+  restoreSetupScrollPosition();
   syncAppBranding();
 }
 
@@ -3221,17 +3285,17 @@ document.addEventListener("click", (event) => {
     } else if (field in DEFAULT_PROFILE) {
       setupDraft[field] = value;
     }
-    render();
+    render({ preserveSetupScroll: true, syncSetupFocusAfterRender: false });
     return;
   }
   if (action === "setup-back") {
     setupStep = clamp(setupStep - 1, 0, SETUP_STEPS.length - 1);
-    render();
+    render({ preserveSetupScroll: true, syncSetupFocusAfterRender: false });
     return;
   }
   if (action === "setup-next") {
     setupStep = clamp(setupStep + 1, 0, SETUP_STEPS.length - 1);
-    render();
+    render({ preserveSetupScroll: true, syncSetupFocusAfterRender: false });
     return;
   }
   if (action === "setup-finish") {
