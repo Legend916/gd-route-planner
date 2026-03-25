@@ -2356,6 +2356,19 @@ function getDnaSimilarity(leftDna, rightDna) {
   }, 0);
 }
 
+function hasMeaningfulSkillBranch(dna, skillId) {
+  if (!dna || !skillId) {
+    return false;
+  }
+
+  const share = dna.shares?.[skillId] || 0;
+  const display = dna.display?.[skillId] || 0;
+  const highlightIndex = dna.highlights?.findIndex((entry) => entry.id === skillId) ?? -1;
+  return share >= 18
+    || (share >= 12 && display >= 55)
+    || (highlightIndex > -1 && highlightIndex <= 1 && share >= 10);
+}
+
 function getTrainingAffinities(step) {
   const skillText = normalizeText(step.skills.join(" "));
   const length = LEVEL_META[step.metaKey]?.length || step.length;
@@ -3983,6 +3996,7 @@ function buildSkillMapEngine() {
   const repairSkill = mostNeglected?.id || weakest?.id || currentDna?.dominant?.id;
   const repairCandidate = [...unlockedCandidates]
     .filter((step) => !usedAlternateKeys.has(getStepRouteKey(step)))
+    .filter((step) => hasMeaningfulSkillBranch(dnaByStepKey.get(getStepRouteKey(step)), repairSkill))
     .sort((left, right) => {
       const leftDna = dnaByStepKey.get(getStepRouteKey(left));
       const rightDna = dnaByStepKey.get(getStepRouteKey(right));
@@ -4002,7 +4016,12 @@ function buildSkillMapEngine() {
 
   const enduranceCandidate = [...unlockedCandidates]
     .filter((step) => !usedAlternateKeys.has(getStepRouteKey(step)))
-    .filter((step) => ["Long", "XL"].includes(step.length) || (dnaByStepKey.get(getStepRouteKey(step))?.display?.endurance || 0) >= 60)
+    .filter((step) => {
+      const dna = dnaByStepKey.get(getStepRouteKey(step));
+      return (["Long", "XL"].includes(step.length) || (dna?.display?.endurance || 0) >= 60)
+        && hasMeaningfulSkillBranch(dna, "endurance")
+        && ((dna?.shares?.endurance || 0) >= 22 || (dna?.display?.endurance || 0) >= 70);
+    })
     .sort((left, right) => {
       const leftDna = dnaByStepKey.get(getStepRouteKey(left));
       const rightDna = dnaByStepKey.get(getStepRouteKey(right));
