@@ -583,6 +583,8 @@ h4 {
 }
 
 .summary-panel,
+.skill-map-panel,
+.coverage-panel,
 .coach-panel,
 .reward-panel,
 .quests-panel,
@@ -596,6 +598,29 @@ h4 {
 .training-panel {
   display: grid;
   gap: 16px;
+}
+
+.objective-card {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.overview-sidebar {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.skill-map-panel,
+.coverage-panel {
+  grid-column: 1 / -1;
+}
+
+.skill-map-panel {
+  grid-row: 2;
+}
+
+.coverage-panel {
+  grid-row: 3;
 }
 
 .quests-panel {
@@ -768,6 +793,312 @@ h4 {
 .objective-card__intel {
   display: grid;
   gap: 12px;
+}
+
+.skill-map__layout,
+.skill-grid,
+.skill-map__hero,
+.route-analysis,
+.route-analysis__primary,
+.route-analysis__insights,
+.route-analysis__alternates,
+.route-dna,
+.route-dna__bars,
+.coverage-heatmap,
+.route-branches,
+.skill-card,
+.skill-card__bars {
+  display: grid;
+  gap: 12px;
+}
+
+.skill-map__layout {
+  gap: 18px;
+}
+
+.skill-map__hero,
+.route-analysis {
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+  align-items: start;
+}
+
+.skill-map__identity,
+.skill-map__chart,
+.route-branch,
+.route-alert,
+.route-brief,
+.route-dna,
+.skill-card {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.skill-map__title {
+  font-size: 2rem;
+  line-height: 0.98;
+  text-transform: capitalize;
+}
+
+.skill-map__chart {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  background:
+    radial-gradient(circle at top, rgba(104, 211, 255, 0.16), transparent 48%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.skill-map__identity,
+.route-alert {
+  display: grid;
+  gap: 10px;
+}
+
+.skill-map__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.skill-map__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skill-map__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.skill-map__legend-dot--player {
+  background: linear-gradient(135deg, rgba(104, 211, 255, 0.9), rgba(255, 214, 110, 0.7));
+}
+
+.skill-map__legend-dot--route {
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+}
+
+.skill-radar {
+  width: min(100%, 320px);
+  height: auto;
+}
+
+.skill-radar__ring,
+.skill-radar__axis {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.skill-radar__label {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.skill-radar__area--route {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 255, 255, 0.62);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.skill-radar__area--player {
+  fill: url(#skill-radar-fill);
+  stroke: rgba(104, 211, 255, 0.9);
+  stroke-width: 2.2;
+}
+
+.skill-radar__dot {
+  fill: var(--warning);
+  stroke: rgba(11, 18, 32, 0.9);
+  stroke-width: 2;
+}
+
+.skill-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.skill-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.skill-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--skill-accent);
+}
+
+.skill-card__top,
+.route-branch__top,
+.coverage-heatmap__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.skill-card__row,
+.route-dna__row {
+  display: grid;
+  grid-template-columns: minmax(54px, auto) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.skill-card__track,
+.route-dna__track {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.skill-card__track span,
+.route-dna__track span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--skill-accent, var(--accent)) 0%, rgba(255, 255, 255, 0.95) 140%);
+}
+
+.skill-card__track--demand span {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4));
+}
+
+.skill-card__track--exposure span {
+  background: linear-gradient(90deg, rgba(99, 212, 154, 0.9), rgba(143, 226, 239, 0.9));
+}
+
+.route-brief {
+  border-left: 3px solid rgba(255, 214, 110, 0.55);
+}
+
+.route-brief--compact,
+.route-dna--compact {
+  padding: 14px;
+}
+
+.route-brief__copy,
+.route-dna__copy {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.route-dna__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.route-dna__label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.route-analysis__alternates {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.route-branch--main {
+  border-color: rgba(104, 211, 255, 0.34);
+  background:
+    linear-gradient(180deg, rgba(104, 211, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(255, 255, 255, 0.04);
+}
+
+.route-alert {
+  border-left: 4px solid rgba(104, 211, 255, 0.35);
+}
+
+.route-alert--warning {
+  border-left-color: rgba(255, 140, 140, 0.72);
+}
+
+.route-alert--good {
+  border-left-color: rgba(99, 212, 154, 0.72);
+}
+
+.coverage-heatmap__scroll {
+  overflow-x: auto;
+}
+
+.coverage-heatmap__table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.coverage-heatmap__table th,
+.coverage-heatmap__table td {
+  text-align: center;
+  padding: 0;
+}
+
+.coverage-heatmap__table thead th {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-bottom: 2px;
+}
+
+.coverage-heatmap__table tbody th {
+  min-width: 190px;
+  text-align: left;
+  padding-right: 12px;
+}
+
+.coverage-heatmap__table tbody th strong,
+.coverage-heatmap__table tbody th span {
+  display: block;
+}
+
+.coverage-heatmap__table tbody th span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 400;
+}
+
+.coverage-cell {
+  display: inline-grid;
+  place-items: center;
+  min-width: 48px;
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.coverage-heatmap__table tbody tr.is-current .coverage-cell {
+  box-shadow: 0 0 0 1px rgba(255, 214, 110, 0.34);
+}
+
+.world__intel-row--stack {
+  justify-content: flex-start;
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .intel-card,
@@ -1830,15 +2161,27 @@ h4 {
   .session-panel__grid,
   .quests-grid,
   .boss-panel__grid,
-  .reward-badges {
+  .reward-badges,
+  .skill-grid,
+  .route-analysis__alternates {
     grid-template-columns: 1fr;
   }
 
+  .skill-map__hero,
+  .route-analysis {
+    grid-template-columns: 1fr;
+  }
+
+  .objective-card,
+  .overview-sidebar,
+  .skill-map-panel,
+  .coverage-panel,
   .planner-panel,
   .mastery-panel,
   .boss-panel,
   .training-panel {
     grid-column: auto;
+    grid-row: auto;
   }
 
   .route-sidebar {
@@ -1880,6 +2223,9 @@ h4 {
   .progress-card__top,
   .objective-card__header,
   .objective-card__layout,
+  .skill-card__top,
+  .route-branch__top,
+  .coverage-heatmap__top,
   .quest-card__top,
   .mastery-card__top,
   .session-block__top,
@@ -1943,6 +2289,15 @@ h4 {
     width: 56px;
     height: 56px;
     font-size: 1.8rem;
+  }
+
+  .skill-map__title {
+    font-size: 1.55rem;
+  }
+
+  .skill-card__row,
+  .route-dna__row {
+    grid-template-columns: minmax(48px, auto) minmax(0, 1fr) auto;
   }
 
   .toast {

@@ -1,6 +1,6 @@
-const SAVE_VERSION = "path-to-1-v8";
-const LEGACY_SAVE_VERSIONS = new Set(["path-to-1-v4", "path-to-1-v5", "path-to-1-v6", "path-to-1-v7", SAVE_VERSION]);
-const ROUTE_VERSION = "4.1";
+const SAVE_VERSION = "path-to-1-v9";
+const LEGACY_SAVE_VERSIONS = new Set(["path-to-1-v4", "path-to-1-v5", "path-to-1-v6", "path-to-1-v7", "path-to-1-v8", SAVE_VERSION]);
+const ROUTE_VERSION = "5.0";
 const VERIFIED_AT = "March 21, 2026";
 const STORAGE_KEY = "gd-path-to-1-save";
 const DEFAULT_THEME = "arcade";
@@ -34,6 +34,99 @@ const THEMES = [
   { id: "sunset", label: "Sunset", description: "Orange and gold quest map", colors: ["#ffb347", "#ff6f61", "#ffe07d"] },
   { id: "frost", label: "Frost", description: "Cold crystal route", colors: ["#b9f2ff", "#82cfff", "#9de7d7"] },
 ];
+
+const SKILL_MAP_META = [
+  {
+    id: "wave",
+    label: "Wave",
+    shortLabel: "Wave",
+    color: "#68d3ff",
+    identityLabel: "wave-heavy climber",
+    gapLabel: "wave consistency",
+    focusCopy: "tunnel control and straight-line wave reads",
+  },
+  {
+    id: "ship",
+    label: "Ship",
+    shortLabel: "Ship",
+    color: "#8fe487",
+    identityLabel: "ship-forward pilot",
+    gapLabel: "ship line control",
+    focusCopy: "ship lines, micro-adjustments, and air control",
+  },
+  {
+    id: "timings",
+    label: "Timings",
+    shortLabel: "Timings",
+    color: "#ffd66e",
+    identityLabel: "timing-first reactor",
+    gapLabel: "timing precision",
+    focusCopy: "orb clicks, burst timing, and precise sync",
+  },
+  {
+    id: "memory",
+    label: "Memory",
+    shortLabel: "Memory",
+    color: "#ff8fb3",
+    identityLabel: "memory-reader",
+    gapLabel: "memory exposure",
+    focusCopy: "learn-heavy reads, traps, and routing memory",
+  },
+  {
+    id: "duals",
+    label: "Duals",
+    shortLabel: "Duals",
+    color: "#b18bff",
+    identityLabel: "dual-aware splitter",
+    gapLabel: "dual consistency",
+    focusCopy: "split-focus dual control and mirrored awareness",
+  },
+  {
+    id: "endurance",
+    label: "Endurance",
+    shortLabel: "Endurance",
+    color: "#ff9966",
+    identityLabel: "endurance grinder",
+    gapLabel: "endurance floor",
+    focusCopy: "late-run stamina, long focus, and run management",
+  },
+  {
+    id: "nerve",
+    label: "Nerve Control",
+    shortLabel: "Nerves",
+    color: "#ff6b6b",
+    identityLabel: "nerve-ready closer",
+    gapLabel: "late-run nerve",
+    focusCopy: "boss pressure, endings, and closeout composure",
+  },
+  {
+    id: "consistency",
+    label: "Consistency",
+    shortLabel: "Consistency",
+    color: "#6fe1c6",
+    identityLabel: "consistency builder",
+    gapLabel: "consistency floor",
+    focusCopy: "repeatable control, clean reps, and stable execution",
+  },
+];
+const SKILL_MAP_LOOKUP = Object.fromEntries(SKILL_MAP_META.map((skill) => [skill.id, skill]));
+const SKILL_DNA_RULES = [
+  { keywords: ["wave", "tunnel", "straight line", "straight-line", "straight fly", "straight-fly"], weights: { wave: 1.8, consistency: 0.35 } },
+  { keywords: ["ship", "line control", "micro", "ufo"], weights: { ship: 1.65, consistency: 0.35 } },
+  { keywords: ["timing", "timings", "rhythm", "precision", "orb", "click", "burst", "reaction", "technical"], weights: { timings: 1.7, consistency: 0.3 } },
+  { keywords: ["memory", "trap", "learn", "pattern", "mirror", "routing", "visual read", "visual reading", "read discipline"], weights: { memory: 1.7, consistency: 0.2 } },
+  { keywords: ["dual", "duals", "split focus", "dual awareness"], weights: { duals: 2, consistency: 0.25 } },
+  { keywords: ["endurance", "stamina", "xl", "late run", "late-run", "long focus", "run management", "concentration"], weights: { endurance: 1.75, nerve: 0.3, consistency: 0.3 } },
+  { keywords: ["nerve", "nerves", "pressure", "composure", "ending", "closeout", "first clear", "boss"], weights: { nerve: 1.8, endurance: 0.2, consistency: 0.25 } },
+  { keywords: ["consistency", "discipline", "stable", "confidence", "control", "execution", "flow", "repetition"], weights: { consistency: 1.65, timings: 0.2 } },
+];
+const TRAINING_SIGNAL_TO_SKILLS = {
+  wave: { wave: 1.1, consistency: 0.3 },
+  chokepoint: { timings: 1, consistency: 0.45 },
+  stamina: { endurance: 1.1, nerve: 0.25 },
+  nerve: { nerve: 1.2, consistency: 0.3 },
+  ending: { nerve: 0.9, endurance: 0.85, consistency: 0.45 },
+};
 
 const WORLD_BIOMES = [
   { id: "dawn-fields", label: "Dawn Fields", subtitle: "Starter meadows and low-stakes ramps", accent: "#93f36f", accent2: "#ffe36b", skyA: "#5ad0a7", skyB: "#173a2f", ground: "#1f5b36", mist: "rgba(147, 243, 111, 0.16)", path: "#fff1a8" },
@@ -378,6 +471,23 @@ function escapeHtml(value) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function roundTo(value, digits = 1) {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function hexToRgba(hex, alpha = 1) {
+  const normalized = String(hex || "").replace("#", "").trim();
+  const safeHex = normalized.length === 3
+    ? normalized.split("").map((char) => `${char}${char}`).join("")
+    : normalized.padEnd(6, "0").slice(0, 6);
+  const parsed = Number.parseInt(safeHex, 16);
+  const red = (parsed >> 16) & 255;
+  const green = (parsed >> 8) & 255;
+  const blue = parsed & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${clamp(alpha, 0, 1)})`;
 }
 
 function normalizeText(value) {
@@ -1630,7 +1740,8 @@ function loadState() {
 
 let state = loadState();
 let trainingEngine = buildTrainingEngine();
-let coachEngine = null;
+let coachEngine = buildCoachEngine();
+let skillEngine = buildSkillMapEngine();
 let setupOpen = !state.profile;
 let setupStep = 0;
 let setupDraft = {
@@ -1664,6 +1775,8 @@ if (routeData.preparedWorlds.some((world) => world.id === initialUrlState.worldI
 const elements = {
   mainContent: document.getElementById("main-content"),
   objectiveCard: document.getElementById("objective-card"),
+  skillMapPanel: document.getElementById("skill-map-panel"),
+  coveragePanel: document.getElementById("coverage-panel"),
   coachPanel: document.getElementById("coach-panel"),
   rewardPanel: document.getElementById("reward-panel"),
   questsPanel: document.getElementById("quests-panel"),
@@ -2093,6 +2206,154 @@ function inferTrainingSignalsFromText(text) {
   return TRAINING_SIGNAL_META
     .filter((signal) => (TRAINING_NOTE_KEYWORDS[signal.id] || []).some((keyword) => normalized.includes(normalizeText(keyword))))
     .map((signal) => signal.id);
+}
+
+function createSkillVector(seed = 0) {
+  return Object.fromEntries(SKILL_MAP_META.map((skill) => [skill.id, seed]));
+}
+
+function getSkillMeta(skillId) {
+  return SKILL_MAP_LOOKUP[skillId] || SKILL_MAP_META[0];
+}
+
+function addSkillWeight(vector, skillId, amount) {
+  if (!(skillId in vector)) {
+    return;
+  }
+  vector[skillId] += amount;
+}
+
+function addSkillWeights(vector, weights, multiplier = 1) {
+  Object.entries(weights || {}).forEach(([skillId, amount]) => {
+    addSkillWeight(vector, skillId, amount * multiplier);
+  });
+}
+
+function mixSkillVector(target, source, multiplier = 1) {
+  SKILL_MAP_META.forEach((skill) => {
+    addSkillWeight(target, skill.id, (source?.[skill.id] || 0) * multiplier);
+  });
+}
+
+function divideSkillVector(vector, divisor) {
+  const next = createSkillVector(0);
+  if (!divisor) {
+    return next;
+  }
+  SKILL_MAP_META.forEach((skill) => {
+    next[skill.id] = vector[skill.id] / divisor;
+  });
+  return next;
+}
+
+function getSkillVectorTotal(vector) {
+  return SKILL_MAP_META.reduce((total, skill) => total + (vector?.[skill.id] || 0), 0);
+}
+
+function normalizeSkillShares(vector) {
+  const total = getSkillVectorTotal(vector);
+  const next = createSkillVector(0);
+  if (!total) {
+    return next;
+  }
+  SKILL_MAP_META.forEach((skill) => {
+    next[skill.id] = (vector[skill.id] / total) * 100;
+  });
+  return next;
+}
+
+function getRelativeSkillDisplay(vector) {
+  const peak = Math.max(...SKILL_MAP_META.map((skill) => vector?.[skill.id] || 0), 0);
+  const next = createSkillVector(0);
+  if (!peak) {
+    return next;
+  }
+  SKILL_MAP_META.forEach((skill) => {
+    next[skill.id] = Math.round(((vector[skill.id] || 0) / peak) * 100);
+  });
+  return next;
+}
+
+function getTopSkillHighlights(vector, limit = 3, minimum = 0) {
+  return SKILL_MAP_META
+    .map((skill) => ({
+      ...skill,
+      value: vector?.[skill.id] || 0,
+    }))
+    .filter((entry) => entry.value > minimum)
+    .sort((left, right) => right.value - left.value)
+    .slice(0, limit);
+}
+
+function getStepSkillText(step) {
+  return normalizeText([
+    step.name,
+    step.reason,
+    step.skills.join(" "),
+    step.difficulty,
+    step.length,
+    step.worldTitle,
+    step.worldLabel,
+  ].join(" "));
+}
+
+function buildRouteDna(step) {
+  const text = getStepSkillText(step);
+  const raw = createSkillVector(0);
+
+  SKILL_DNA_RULES.forEach((rule) => {
+    if (rule.keywords.some((keyword) => text.includes(normalizeText(keyword)))) {
+      addSkillWeights(raw, rule.weights);
+    }
+  });
+
+  ["wave", "ship", "timings", "memory", "duals", "endurance"].forEach((focusId) => {
+    if (!matchesFocus(step, focusId)) {
+      return;
+    }
+    addSkillWeight(raw, focusId, focusId === "duals" ? 1.55 : 1.2);
+    addSkillWeight(raw, "consistency", 0.16);
+  });
+
+  if (step.length === "Long") {
+    addSkillWeights(raw, { endurance: 0.7, consistency: 0.22, nerve: 0.08 });
+  } else if (step.length === "XL") {
+    addSkillWeights(raw, { endurance: 1.18, consistency: 0.34, nerve: 0.24 });
+  }
+  if (step.isBoss || step.milestone) {
+    addSkillWeights(raw, { nerve: 0.72, consistency: 0.4, endurance: 0.18 });
+  }
+  if (step.placement) {
+    addSkillWeights(raw, { nerve: 0.4, consistency: 0.2 });
+  }
+  if (!getSkillVectorTotal(raw)) {
+    addSkillWeights(raw, { consistency: 1, timings: 0.45 });
+  }
+
+  const shares = normalizeSkillShares(raw);
+  const display = getRelativeSkillDisplay(shares);
+  const highlights = getTopSkillHighlights(shares, 4, 0.1);
+  const dominant = highlights[0] || { ...SKILL_MAP_META[0], value: 0 };
+  const supportLabels = highlights.slice(1, 3).map((entry) => entry.label.toLowerCase());
+  const summary = supportLabels.length
+    ? `${dominant.label} primary with ${joinWithAnd(supportLabels)} support`
+    : `${dominant.label} primary`;
+
+  return {
+    raw,
+    shares,
+    display,
+    highlights,
+    dominant,
+    summary,
+    signature: highlights.slice(0, 3).map((entry) => `${entry.shortLabel} ${Math.round(display[entry.id] || 0)}`),
+  };
+}
+
+function getDnaSimilarity(leftDna, rightDna) {
+  return SKILL_MAP_META.reduce((total, skill) => {
+    return total + Math.min(leftDna?.shares?.[skill.id] || 0, rightDna?.shares?.[skill.id] || 0);
+  }, 0);
 }
 
 function getTrainingAffinities(step) {
@@ -3126,6 +3387,485 @@ function buildCoachEngine() {
   };
 }
 
+function buildSkillMapEngine() {
+  const allSteps = getAllRouteSteps();
+  const dnaByStepKey = new Map();
+  const dnaByMetaKey = new Map();
+  const routeCoverageTotals = createSkillVector(0);
+  const liveCoverageTotals = createSkillVector(0);
+  const exposureTotals = createSkillVector(0);
+  const masteryTotals = createSkillVector(0);
+  const masteryWeights = createSkillVector(0);
+  const positiveSessionTotals = createSkillVector(0);
+  const pressureTotals = createSkillVector(0);
+  let routeWeightTotal = 0;
+  let liveWeightTotal = 0;
+  const currentStep = getCurrentStep() || coachEngine?.bossReadiness?.prepInsight?.step || routeData.allMain[routeData.allMain.length - 1] || null;
+  const currentWorld = currentStep ? routeData.preparedWorlds[currentStep.worldIndex] : getCurrentWorld();
+
+  const getStepWeight = (step) => (typeof step.number === "number" ? 1 : 0.72);
+  const getExposureWeight = (status) => {
+    switch (status) {
+      case "cleared":
+        return 1.08;
+      case "revisit":
+        return 1;
+      case "consistent":
+        return 0.94;
+      case "practicing":
+        return 0.82;
+      case "ready":
+        return 0.56;
+      case "optional":
+        return 0.38;
+      default:
+        return 0;
+    }
+  };
+  const addCoverage = (target, vector, multiplier = 1) => {
+    SKILL_MAP_META.forEach((skill) => {
+      addSkillWeight(target, skill.id, (vector?.[skill.id] || 0) * multiplier);
+    });
+  };
+  const getSharedHighlights = (leftDna, rightDna, limit = 2) => {
+    const shared = createSkillVector(0);
+    SKILL_MAP_META.forEach((skill) => {
+      shared[skill.id] = Math.min(leftDna?.shares?.[skill.id] || 0, rightDna?.shares?.[skill.id] || 0);
+    });
+    return getTopSkillHighlights(shared, limit, 3);
+  };
+  const formatSkillList = (entries, limit = 2) => {
+    return joinWithAnd(entries.slice(0, limit).map((entry) => entry.label.toLowerCase()));
+  };
+
+  allSteps.forEach((step) => {
+    const stepKey = getStepRouteKey(step);
+    const dna = buildRouteDna(step);
+    const status = getStepDisplayStatus(step);
+    const insight = coachEngine?.insightByMetaKey?.get(step.metaKey) || null;
+    const stepWeight = getStepWeight(step);
+    const touched = status !== "locked"
+      || state.trainingLog.some((session) => session.metaKey === step.metaKey)
+      || Boolean(state.levelNotes[stepKey]);
+
+    dnaByStepKey.set(stepKey, dna);
+    if (!dnaByMetaKey.has(step.metaKey)) {
+      dnaByMetaKey.set(step.metaKey, dna);
+    }
+
+    addCoverage(routeCoverageTotals, dna.shares, stepWeight);
+    routeWeightTotal += stepWeight;
+
+    if (status !== "locked") {
+      addCoverage(liveCoverageTotals, dna.shares, stepWeight);
+      liveWeightTotal += stepWeight;
+    }
+
+    if (touched) {
+      addCoverage(exposureTotals, dna.shares, getExposureWeight(status) * stepWeight);
+    }
+    if (insight && touched) {
+      SKILL_MAP_META.forEach((skill) => {
+        const contribution = (dna.shares[skill.id] || 0) * stepWeight;
+        masteryTotals[skill.id] += contribution * insight.masteryScore;
+        masteryWeights[skill.id] += contribution;
+      });
+    }
+  });
+
+  state.trainingLog.forEach((session) => {
+    const dna = dnaByMetaKey.get(session.metaKey);
+    if (!dna) {
+      return;
+    }
+
+    const baseExposure = session.result === "clear"
+      ? 0.34
+      : session.result === "stable"
+        ? 0.24
+        : session.result === "progress"
+          ? 0.16
+          : 0.1;
+    addCoverage(exposureTotals, dna.shares, baseExposure);
+
+    if (["stable", "clear"].includes(session.result)) {
+      addCoverage(positiveSessionTotals, dna.shares, session.result === "clear" ? 0.28 : 0.18);
+    } else if (session.result === "rough") {
+      addCoverage(pressureTotals, dna.shares, 0.08);
+    }
+
+    session.issues.forEach((signalId) => {
+      addSkillWeights(pressureTotals, TRAINING_SIGNAL_TO_SKILLS[signalId], signalId === "ending" ? 1.18 : 0.92);
+    });
+
+    if (session.failPoint === "ending" && session.result !== "clear") {
+      addSkillWeights(pressureTotals, { nerve: 1.05, endurance: 0.85, consistency: 0.34 });
+    } else if (session.failPoint === "opening" && session.result === "rough") {
+      addSkillWeights(pressureTotals, { timings: 0.44, wave: 0.36, consistency: 0.2 });
+    } else if (session.failPoint === "mid" && session.result === "rough") {
+      addSkillWeights(pressureTotals, { timings: 0.52, consistency: 0.26 });
+    }
+  });
+
+  Object.entries(state.levelNotes).forEach(([levelKey, note]) => {
+    if (!note.trim()) {
+      return;
+    }
+    inferTrainingSignalsFromText(note).forEach((signalId) => {
+      addSkillWeights(pressureTotals, TRAINING_SIGNAL_TO_SKILLS[signalId], 0.26);
+    });
+  });
+
+  const routeDemand = divideSkillVector(routeCoverageTotals, Math.max(routeWeightTotal, 1));
+  const liveDemand = divideSkillVector(liveCoverageTotals, Math.max(liveWeightTotal, 1));
+  const routeDemandDisplay = getRelativeSkillDisplay(routeDemand);
+  const liveDemandDisplay = getRelativeSkillDisplay(liveDemand);
+  const exposureDisplay = getRelativeSkillDisplay(exposureTotals);
+
+  const entries = SKILL_MAP_META.map((skill) => {
+    const masteryBase = masteryWeights[skill.id]
+      ? masteryTotals[skill.id] / masteryWeights[skill.id]
+      : 18 + exposureDisplay[skill.id] * 0.22;
+    const confidence = clamp(positiveSessionTotals[skill.id] * 22, 0, 16);
+    const pressure = clamp(pressureTotals[skill.id] * 8.2, 0, 26);
+    const score = clamp(
+      Math.round(masteryBase * 0.74 + exposureDisplay[skill.id] * 0.14 + confidence - pressure * 0.68),
+      8,
+      98,
+    );
+    const neglect = clamp(
+      Math.round(liveDemandDisplay[skill.id] * 0.82 - exposureDisplay[skill.id] + pressure * 0.84),
+      0,
+      100,
+    );
+
+    return {
+      ...skill,
+      score,
+      exposure: exposureDisplay[skill.id],
+      routeDemand: routeDemandDisplay[skill.id],
+      liveDemand: liveDemandDisplay[skill.id],
+      routeShare: roundTo(routeDemand[skill.id], 1),
+      liveShare: roundTo(liveDemand[skill.id], 1),
+      neglect,
+      pressure: roundTo(pressure, 1),
+      confidence: roundTo(confidence, 1),
+      delta: Math.round(liveDemandDisplay[skill.id] - score),
+      statusLabel: score >= 78 ? "Sharp" : score >= 60 ? "Stable" : score >= 42 ? "Building" : "Thin",
+    };
+  });
+
+  const byId = Object.fromEntries(entries.map((entry) => [entry.id, entry]));
+  const strongest = [...entries].sort((left, right) => right.score - left.score)[0];
+  const weakest = [...entries].sort((left, right) => left.score - right.score)[0];
+  const mostNeglected = [...entries].sort((left, right) => right.neglect - left.neglect)[0];
+  const spread = strongest.score - weakest.score;
+  const averageScore = average(entries.map((entry) => entry.score));
+  const identityTitle = spread <= 12 && averageScore >= 42 ? "balanced player" : strongest.identityLabel;
+  const signalGapLabel = trainingEngine?.primarySignal
+    ? ({
+      wave: "wave inconsistency",
+      chokepoint: "unstable chokepoints",
+      stamina: "thin endurance floor",
+      nerve: "late-run nerves",
+      ending: "weak endings",
+    }[trainingEngine.primarySignal.id] || mostNeglected.gapLabel)
+    : mostNeglected.neglect >= 14
+      ? `low ${mostNeglected.label.toLowerCase()} exposure`
+      : `low ${weakest.label.toLowerCase()} consistency`;
+  const identity = {
+    title: identityTitle,
+    summary: `${identityTitle} with ${signalGapLabel}.`,
+    subline: `${strongest.label} is the sharpest lane right now. ${mostNeglected.label} is the least-built part of the live route.`,
+    strongest,
+    weakest,
+    neglected: mostNeglected,
+  };
+
+  const worldRows = routeData.preparedWorlds.map((world) => {
+    const mainCoverageTotals = createSkillVector(0);
+    const branchCoverageTotals = createSkillVector(0);
+    let mainWeight = 0;
+    let branchWeight = 0;
+
+    world.levels.forEach((step) => {
+      addCoverage(mainCoverageTotals, dnaByStepKey.get(getStepRouteKey(step))?.shares, 1);
+      mainWeight += 1;
+    });
+    world.bonusPacks.forEach((pack) => {
+      pack.steps.forEach((step) => {
+        addCoverage(branchCoverageTotals, dnaByStepKey.get(getStepRouteKey(step))?.shares, 0.72);
+        branchWeight += 0.72;
+      });
+    });
+
+    const coverage = divideSkillVector(mainCoverageTotals, Math.max(mainWeight, 1));
+    const branchCoverage = divideSkillVector(branchCoverageTotals, Math.max(branchWeight || 1, 1));
+    const display = getRelativeSkillDisplay(coverage);
+    const highlights = getTopSkillHighlights(coverage, 3, 0.1);
+    const dominant = highlights[0] || { ...SKILL_MAP_META[0], value: 0 };
+    const alerts = [];
+    if (byId[dominant.id]?.score <= 48 && display[dominant.id] >= 74) {
+      alerts.push(`${dominant.label} climbs faster here than your current profile.`);
+    }
+    if (branchWeight && branchCoverage.memory > coverage.memory + 4 && byId.memory.neglect >= 12) {
+      alerts.push("The bonus branch is the cleanest memory patch in this world.");
+    }
+    if (!alerts.length) {
+      alerts.push(`${world.title} leans ${formatSkillList(highlights)}.`);
+    }
+
+    return {
+      worldId: world.id,
+      worldLabel: world.worldLabel,
+      title: world.title,
+      current: currentWorld?.id === world.id,
+      dominant,
+      highlights,
+      coverage,
+      display,
+      branchCoverage,
+      alerts,
+    };
+  });
+
+  const worldMaxBySkill = createSkillVector(0);
+  worldRows.forEach((row) => {
+    SKILL_MAP_META.forEach((skill) => {
+      worldMaxBySkill[skill.id] = Math.max(worldMaxBySkill[skill.id], row.coverage[skill.id] || 0);
+    });
+  });
+
+  const currentDna = currentStep ? dnaByStepKey.get(getStepRouteKey(currentStep)) : null;
+  const currentInsight = currentStep ? coachEngine?.insightByMetaKey?.get(currentStep.metaKey) || null : null;
+  const currentReasons = [];
+  const currentHighlights = currentDna?.highlights || [];
+  const thinnestMatch = [...currentHighlights]
+    .map((entry) => byId[entry.id])
+    .sort((left, right) => right.neglect - left.neglect)[0];
+
+  if (trainingEngine.primarySignal) {
+    const signalCopy = TRAINING_SIGNAL_TO_SKILLS[trainingEngine.primarySignal.id] || {};
+    const matchingSkillId = Object.keys(signalCopy)
+      .sort((left, right) => (signalCopy[right] || 0) - (signalCopy[left] || 0))
+      .find((skillId) => (currentDna?.shares?.[skillId] || 0) >= 15);
+    if (matchingSkillId) {
+      currentReasons.push(`Recent sessions are leaking ${trainingEngine.primarySignal.label.toLowerCase()}, and ${currentStep.name} directly trains ${getSkillMeta(matchingSkillId).label.toLowerCase()}.`);
+    }
+  }
+  if (thinnestMatch && thinnestMatch.neglect >= 12) {
+    currentReasons.push(`This is the cleanest ${thinnestMatch.label.toLowerCase()} repair pick still inside your main ladder.`);
+  }
+  if (currentStep && !currentStep.isBoss) {
+    const bossStep = coachEngine?.bossReadiness?.boss || null;
+    const bossDna = bossStep ? dnaByStepKey.get(getStepRouteKey(bossStep)) : null;
+    const overlap = getSharedHighlights(currentDna, bossDna, 2);
+    if (bossStep && overlap.length) {
+      currentReasons.push(`It is a safer bridge before ${bossStep.name} because it shares ${formatSkillList(overlap)} without the full boss pressure.`);
+    }
+  }
+  const overIndexed = [...entries].sort((left, right) => right.exposure - left.exposure);
+  if (overIndexed[0].exposure - overIndexed[overIndexed.length - 1].exposure >= 18 && mostNeglected && currentDna?.shares?.[mostNeglected.id] >= 14) {
+    currentReasons.push(`Your route currently over-indexes on ${overIndexed[0].label.toLowerCase()}, so this keeps ${mostNeglected.label.toLowerCase()} from falling behind.`);
+  }
+  if (!currentReasons.length && currentDna) {
+    currentReasons.push(`${currentStep.name} keeps ${formatSkillList(currentDna.highlights)} in the route without drifting off the main climb.`);
+  }
+
+  const unlockedCandidates = allSteps
+    .filter((step) => currentStep && getStepRouteKey(step) !== getStepRouteKey(currentStep))
+    .filter((step) => isTrainingCandidateUnlocked(step));
+
+  const buildAlternate = (kind, label, candidate, tradeoff, emphasisSkillId = null) => {
+    if (!candidate) {
+      return null;
+    }
+    const candidateKey = getStepRouteKey(candidate);
+    return {
+      kind,
+      label,
+      step: candidate,
+      dna: dnaByStepKey.get(candidateKey),
+      insight: coachEngine?.insightByMetaKey?.get(candidate.metaKey) || null,
+      emphasisSkillId,
+      tradeoff,
+    };
+  };
+
+  const usedAlternateKeys = new Set();
+  const saferCandidate = [...unlockedCandidates]
+    .filter((step) => {
+      const insight = coachEngine?.insightByMetaKey?.get(step.metaKey) || null;
+      return (insight?.masteryScore || 0) >= ((currentInsight?.masteryScore || 0) + 8)
+        || ["cleared", "revisit", "consistent"].includes(getStepDisplayStatus(step));
+    })
+    .sort((left, right) => {
+      const leftInsight = coachEngine?.insightByMetaKey?.get(left.metaKey) || null;
+      const rightInsight = coachEngine?.insightByMetaKey?.get(right.metaKey) || null;
+      const leftScore = getDnaSimilarity(dnaByStepKey.get(getStepRouteKey(left)), currentDna) + (leftInsight?.masteryScore || 0) * 0.75;
+      const rightScore = getDnaSimilarity(dnaByStepKey.get(getStepRouteKey(right)), currentDna) + (rightInsight?.masteryScore || 0) * 0.75;
+      return rightScore - leftScore;
+    })[0] || null;
+  if (saferCandidate) {
+    usedAlternateKeys.add(getStepRouteKey(saferCandidate));
+  }
+
+  const repairSkill = mostNeglected?.id || weakest?.id || currentDna?.dominant?.id;
+  const repairCandidate = [...unlockedCandidates]
+    .filter((step) => !usedAlternateKeys.has(getStepRouteKey(step)))
+    .sort((left, right) => {
+      const leftDna = dnaByStepKey.get(getStepRouteKey(left));
+      const rightDna = dnaByStepKey.get(getStepRouteKey(right));
+      const leftInsight = coachEngine?.insightByMetaKey?.get(left.metaKey) || null;
+      const rightInsight = coachEngine?.insightByMetaKey?.get(right.metaKey) || null;
+      const leftScore = (leftDna?.display?.[repairSkill] || 0) * 1.3
+        + (typeof left.number !== "number" ? 10 : 0)
+        + (100 - (leftInsight?.masteryScore || 48)) * 0.24;
+      const rightScore = (rightDna?.display?.[repairSkill] || 0) * 1.3
+        + (typeof right.number !== "number" ? 10 : 0)
+        + (100 - (rightInsight?.masteryScore || 48)) * 0.24;
+      return rightScore - leftScore;
+    })[0] || null;
+  if (repairCandidate) {
+    usedAlternateKeys.add(getStepRouteKey(repairCandidate));
+  }
+
+  const enduranceCandidate = [...unlockedCandidates]
+    .filter((step) => !usedAlternateKeys.has(getStepRouteKey(step)))
+    .filter((step) => ["Long", "XL"].includes(step.length) || (dnaByStepKey.get(getStepRouteKey(step))?.display?.endurance || 0) >= 60)
+    .sort((left, right) => {
+      const leftDna = dnaByStepKey.get(getStepRouteKey(left));
+      const rightDna = dnaByStepKey.get(getStepRouteKey(right));
+      const leftScore = (leftDna?.display?.endurance || 0) * 1.22 + (left.length === "XL" ? 18 : 10) + (leftDna?.display?.nerve || 0) * 0.38;
+      const rightScore = (rightDna?.display?.endurance || 0) * 1.22 + (right.length === "XL" ? 18 : 10) + (rightDna?.display?.nerve || 0) * 0.38;
+      return rightScore - leftScore;
+    })[0] || null;
+
+  const alternates = [
+    buildAlternate(
+      "safer",
+      "Safer alternative",
+      saferCandidate,
+      saferCandidate
+        ? `Similar ${formatSkillList(getSharedHighlights(currentDna, dnaByStepKey.get(getStepRouteKey(saferCandidate)), 2))} load, but your mastery is ${Math.max(0, (coachEngine?.insightByMetaKey?.get(saferCandidate.metaKey)?.masteryScore || 0) - (currentInsight?.masteryScore || 0))} points higher here.`
+        : "",
+    ),
+    buildAlternate(
+      "repair",
+      `${getSkillMeta(repairSkill).label} alternative`,
+      repairCandidate,
+      repairCandidate
+        ? `This is the cleanest off-main rep for ${getSkillMeta(repairSkill).label.toLowerCase()}. Slower route progress, but it patches the thinnest lane in your build.`
+        : "",
+      repairSkill,
+    ),
+    buildAlternate(
+      "endurance",
+      "Endurance alternative",
+      enduranceCandidate,
+      enduranceCandidate
+        ? `Longer rep than ${currentStep?.name || "the main gate"}, built for late-run calm and better endings.`
+        : "",
+      "endurance",
+    ),
+  ].filter(Boolean);
+
+  const alerts = [];
+  if (currentDna?.dominant && byId[currentDna.dominant.id]?.score <= 46 && currentDna.display[currentDna.dominant.id] >= 74) {
+    alerts.push({
+      tone: "warning",
+      title: `${currentDna.dominant.label} spike ahead`,
+      body: `${currentStep.name} leans hard on ${currentDna.dominant.label.toLowerCase()}, but that lane is only at ${byId[currentDna.dominant.id].score}.`,
+    });
+  }
+  if (byId.memory?.neglect >= 14) {
+    alerts.push({
+      tone: "warning",
+      title: "Memory is lagging",
+      body: "The live route has more memory asks than your current exposure bank. A memory side branch would smooth the climb.",
+    });
+  }
+  if (byId.endurance?.exposure <= 38 && routeData.allMain.filter((step) => step.number > state.mainCleared && ["Long", "XL"].includes(step.length)).length >= 4) {
+    alerts.push({
+      tone: "warning",
+      title: "Endurance floor is thin",
+      body: "Several longer gates are still ahead, but recent reps are not building enough late-run stamina.",
+    });
+  }
+  if (strongest.score - weakest.score >= 20 && mostNeglected.neglect >= 16) {
+    alerts.push({
+      tone: "info",
+      title: "Route is narrowing",
+      body: `You are much more built in ${strongest.label.toLowerCase()} than ${mostNeglected.label.toLowerCase()}, so optional branches matter more right now.`,
+    });
+  }
+  if (!alerts.length) {
+    alerts.push({
+      tone: "good",
+      title: "Coverage is holding",
+      body: "The live route is staying relatively balanced. You can afford to keep pushing the main path without a forced detour.",
+    });
+  }
+
+  const mainRecommendation = currentStep && currentDna
+    ? {
+      step: currentStep,
+      dna: currentDna,
+      insight: currentInsight,
+      label: thinnestMatch ? `Best ${thinnestMatch.label.toLowerCase()} repair pick` : "Main route bridge",
+      reason: currentReasons.join(" "),
+      alternates,
+    }
+    : null;
+
+  const levelIntelByStepKey = new Map();
+  allSteps.forEach((step) => {
+    const stepKey = getStepRouteKey(step);
+    const dna = dnaByStepKey.get(stepKey);
+    const world = routeData.preparedWorlds[step.worldIndex];
+    const nextStep = typeof step.number === "number"
+      ? world.levels.find((candidate) => candidate.localNumber === step.localNumber + 1)
+      : null;
+    let whyNow = `${step.name} mainly trains ${formatSkillList(dna.highlights)}.`;
+
+    if (mainRecommendation && stepKey === getStepRouteKey(mainRecommendation.step)) {
+      whyNow = mainRecommendation.reason;
+    } else if (step.isBoss) {
+      whyNow = `${step.name} is the ${world.worldLabel.toLowerCase()} boss gate, so the DNA stacks ${formatSkillList(dna.highlights)} under pressure.`;
+    } else if (step.milestone) {
+      whyNow = `${step.name} is a route checkpoint that banks ${formatSkillList(dna.highlights)} before the climb spikes again.`;
+    } else if (nextStep) {
+      const overlap = getSharedHighlights(dna, dnaByStepKey.get(getStepRouteKey(nextStep)), 2);
+      whyNow = overlap.length >= 2
+        ? `This bridges into ${nextStep.name} by preloading ${formatSkillList(overlap)}.`
+        : `This widens the route with ${formatSkillList(dna.highlights)} before ${nextStep.name}.`;
+    }
+
+    levelIntelByStepKey.set(stepKey, {
+      dna,
+      whyNow,
+      routeRole: step.isBoss ? "Boss lane" : step.milestone ? "Milestone bridge" : "Route slot",
+    });
+  });
+
+  return {
+    entries,
+    byId,
+    identity,
+    routeDemand,
+    liveDemand,
+    routeDemandDisplay,
+    liveDemandDisplay,
+    exposureDisplay,
+    worldRows,
+    worldMaxBySkill,
+    alerts,
+    mainRecommendation,
+    alternates,
+    levelIntelByStepKey,
+  };
+}
+
 function syncCompletedQuestRewards(quests) {
   const completedIds = new Set(state.coach.completedQuests.map((entry) => entry.id));
   let changed = false;
@@ -3156,6 +3896,7 @@ function refreshDerivedState(syncRewards = false) {
   if (syncRewards && syncCompletedQuestRewards(coachEngine.quests)) {
     coachEngine = buildCoachEngine();
   }
+  skillEngine = buildSkillMapEngine();
 }
 
 function getFreshnessSummary() {
@@ -3642,6 +4383,336 @@ function renderLocalJumpButton(label, targetId, className = "button button--ghos
   return `<button class="${className}" type="button" data-action="jump-node" data-target-id="${targetId}">${escapeHtml(label)}</button>`;
 }
 
+function buildRadarPoints(entries, accessor, radius = 118, center = 150) {
+  return entries.map((entry, index) => {
+    const angle = (-Math.PI / 2) + ((Math.PI * 2) * index) / entries.length;
+    const value = clamp(accessor(entry), 0, 100) / 100;
+    const nextRadius = radius * value;
+    const x = center + Math.cos(angle) * nextRadius;
+    const y = center + Math.sin(angle) * nextRadius;
+    return `${roundTo(x, 1)},${roundTo(y, 1)}`;
+  }).join(" ");
+}
+
+function renderSkillRadar() {
+  const entries = skillEngine.entries;
+  const center = 150;
+  const radius = 118;
+  const playerPoints = buildRadarPoints(entries, (entry) => entry.score, radius, center);
+  const routePoints = buildRadarPoints(entries, (entry) => entry.liveDemand, radius, center);
+  const rings = [20, 40, 60, 80, 100];
+
+  return `
+    <svg class="skill-radar" viewBox="0 0 300 300" role="img" aria-label="Radar chart comparing player strength and live route demand across eight skill categories.">
+      <defs>
+        <linearGradient id="skill-radar-fill" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="rgba(104, 211, 255, 0.82)"></stop>
+          <stop offset="100%" stop-color="rgba(255, 214, 110, 0.34)"></stop>
+        </linearGradient>
+      </defs>
+      ${rings.map((ring) => `
+        <polygon
+          class="skill-radar__ring"
+          points="${buildRadarPoints(entries, () => ring, radius, center)}"
+        ></polygon>
+      `).join("")}
+      ${entries.map((entry, index) => {
+        const angle = (-Math.PI / 2) + ((Math.PI * 2) * index) / entries.length;
+        const axisX = center + Math.cos(angle) * radius;
+        const axisY = center + Math.sin(angle) * radius;
+        const labelX = center + Math.cos(angle) * (radius + 22);
+        const labelY = center + Math.sin(angle) * (radius + 22);
+        return `
+          <line class="skill-radar__axis" x1="${center}" y1="${center}" x2="${roundTo(axisX, 1)}" y2="${roundTo(axisY, 1)}"></line>
+          <text class="skill-radar__label" x="${roundTo(labelX, 1)}" y="${roundTo(labelY, 1)}" text-anchor="middle">${escapeHtml(entry.shortLabel)}</text>
+        `;
+      }).join("")}
+      <polygon class="skill-radar__area skill-radar__area--route" points="${routePoints}"></polygon>
+      <polygon class="skill-radar__area skill-radar__area--player" points="${playerPoints}"></polygon>
+      ${entries.map((entry, index) => {
+        const angle = (-Math.PI / 2) + ((Math.PI * 2) * index) / entries.length;
+        const pointRadius = (radius * entry.score) / 100;
+        const x = center + Math.cos(angle) * pointRadius;
+        const y = center + Math.sin(angle) * pointRadius;
+        return `<circle class="skill-radar__dot" cx="${roundTo(x, 1)}" cy="${roundTo(y, 1)}" r="4"></circle>`;
+      }).join("")}
+    </svg>
+  `;
+}
+
+function renderRouteDna(step, compact = false) {
+  const intel = skillEngine.levelIntelByStepKey.get(getStepRouteKey(step));
+  if (!intel) {
+    return "";
+  }
+
+  const highlights = intel.dna.highlights.slice(0, compact ? 3 : 4);
+  return `
+    <section class="route-dna${compact ? " route-dna--compact" : ""}">
+      <div class="route-dna__header">
+        <p class="panel-heading__kicker">Route DNA</p>
+        <span class="pill">${escapeHtml(intel.routeRole)}</span>
+      </div>
+      <div class="route-dna__bars">
+        ${highlights.map((entry) => `
+          <div class="route-dna__row">
+            <span class="route-dna__label">${escapeHtml(entry.shortLabel)}</span>
+            <div class="route-dna__track">
+              <span style="width: ${intel.dna.display[entry.id]}%; --skill-accent: ${entry.color};"></span>
+            </div>
+            <strong>${Math.round(intel.dna.display[entry.id])}</strong>
+          </div>
+        `).join("")}
+      </div>
+      <p class="route-dna__copy">${escapeHtml(intel.dna.summary)}.</p>
+    </section>
+  `;
+}
+
+function renderRouteWhy(step, compact = false) {
+  const intel = skillEngine.levelIntelByStepKey.get(getStepRouteKey(step));
+  if (!intel?.whyNow) {
+    return "";
+  }
+
+  const isMainPick = skillEngine.mainRecommendation && getStepRouteKey(skillEngine.mainRecommendation.step) === getStepRouteKey(step);
+  return `
+    <div class="route-brief${compact ? " route-brief--compact" : ""}">
+      <p class="panel-heading__kicker">${escapeHtml(isMainPick ? "Why This Pick" : "Route Role")}</p>
+      <p class="route-brief__copy">${escapeHtml(intel.whyNow)}</p>
+    </div>
+  `;
+}
+
+function renderRouteAlternate(branch, compact = false) {
+  if (!branch?.step) {
+    return "";
+  }
+
+  const targetId = typeof branch.step.number === "number" ? branch.step.anchorId : branch.step.id;
+  const topTags = branch.dna?.highlights?.slice(0, compact ? 2 : 3) || [];
+  return `
+    <article class="route-branch${compact ? " route-branch--compact" : ""}">
+      <div class="route-branch__top">
+        <div>
+          <p class="panel-heading__kicker">${escapeHtml(branch.label)}</p>
+          <h3>${escapeHtml(branch.step.name)}</h3>
+        </div>
+        <div class="route-branch__meta">
+          ${branch.insight ? renderMasteryTag(branch.insight, true) : ""}
+          ${branch.emphasisSkillId ? renderBadge(getSkillMeta(branch.emphasisSkillId).shortLabel, "badge badge--training") : ""}
+        </div>
+      </div>
+      <div class="objective-card__tag-row">
+        ${renderMetaTag(typeof branch.step.number === "number" ? branch.step.worldLabel : `${branch.step.worldTitle} / Bonus`)}
+        ${topTags.map((entry) => renderMetaTag(entry.shortLabel)).join("")}
+      </div>
+      <p class="route-brief__copy">${escapeHtml(branch.tradeoff)}</p>
+      <div class="quest-card__actions">
+        ${renderJumpButton("View Pick", targetId, branch.step.worldId, "button button--ghost")}
+        ${renderLinkButton(branch.step.levelUrl, "Open Level", "button")}
+      </div>
+    </article>
+  `;
+}
+
+function renderRouteBranches(step, compact = false) {
+  if (!skillEngine.mainRecommendation || getStepRouteKey(skillEngine.mainRecommendation.step) !== getStepRouteKey(step)) {
+    return "";
+  }
+
+  return `
+    <section class="route-branches${compact ? " route-branches--compact" : ""}">
+      <div class="route-dna__header">
+        <p class="panel-heading__kicker">Alternate Branches</p>
+        <span class="pill">${skillEngine.alternates.length}</span>
+      </div>
+      <div class="route-analysis__alternates">
+        ${skillEngine.alternates.length
+          ? skillEngine.alternates.map((branch) => renderRouteAlternate(branch, true)).join("")
+          : '<p class="summary-panel__copy">No alternate routes unlocked yet.</p>'}
+      </div>
+    </section>
+  `;
+}
+
+function renderSkillMapPanel() {
+  if (!elements.skillMapPanel) {
+    return;
+  }
+
+  const { identity } = skillEngine;
+  elements.skillMapPanel.innerHTML = `
+    <div class="panel-heading">
+      <div>
+        <p class="panel-heading__kicker">Skill Map</p>
+        <h2>Progress Identity</h2>
+      </div>
+      <div class="route-toolbar__meta">
+        ${renderMetaTag(`Strongest ${identity.strongest.shortLabel}`)}
+        ${renderMetaTag(`Weakest ${identity.weakest.shortLabel}`)}
+        ${renderMetaTag(`Neglected ${identity.neglected.shortLabel}`)}
+      </div>
+    </div>
+    <div class="skill-map__layout">
+      <div class="skill-map__hero">
+        <div class="skill-map__identity">
+          <p class="panel-heading__kicker">Live Read</p>
+          <h3 class="skill-map__title">${escapeHtml(identity.title)}</h3>
+          <p class="summary-panel__copy">${escapeHtml(identity.summary)}</p>
+          <p class="summary-panel__copy">${escapeHtml(identity.subline)}</p>
+          <div class="objective-card__tag-row">
+            ${renderBadge(`${identity.strongest.shortLabel} ${identity.strongest.score}`, "badge badge--training")}
+            ${renderMetaTag(`${identity.weakest.shortLabel} ${identity.weakest.score}`)}
+            ${renderMetaTag(`${identity.neglected.shortLabel} gap ${identity.neglected.neglect}`)}
+          </div>
+          <div class="skill-map__legend">
+            <span><i class="skill-map__legend-dot skill-map__legend-dot--player"></i>Profile strength</span>
+            <span><i class="skill-map__legend-dot skill-map__legend-dot--route"></i>Live route demand</span>
+          </div>
+        </div>
+        <div class="skill-map__chart">
+          ${renderSkillRadar()}
+        </div>
+      </div>
+      <div class="skill-grid">
+        ${skillEngine.entries.map((entry) => `
+          <article class="skill-card" style="--skill-accent: ${entry.color};">
+            <div class="skill-card__top">
+              <div>
+                <p class="panel-heading__kicker">${escapeHtml(entry.statusLabel)}</p>
+                <h3>${escapeHtml(entry.label)}</h3>
+              </div>
+              <span class="pill">${entry.score}</span>
+            </div>
+            <div class="skill-card__bars">
+              <div class="skill-card__row">
+                <span>Strength</span>
+                <div class="skill-card__track"><span style="width: ${entry.score}%"></span></div>
+                <strong>${entry.score}</strong>
+              </div>
+              <div class="skill-card__row">
+                <span>Live Route</span>
+                <div class="skill-card__track skill-card__track--demand"><span style="width: ${entry.liveDemand}%"></span></div>
+                <strong>${entry.liveDemand}</strong>
+              </div>
+              <div class="skill-card__row">
+                <span>Exposure</span>
+                <div class="skill-card__track skill-card__track--exposure"><span style="width: ${entry.exposure}%"></span></div>
+                <strong>${entry.exposure}</strong>
+              </div>
+            </div>
+            <p class="summary-panel__copy">${escapeHtml(entry.focusCopy.charAt(0).toUpperCase() + entry.focusCopy.slice(1))}. ${escapeHtml(entry.neglect >= 16 ? `${entry.label} is underbuilt for the live route.` : `${entry.label} is holding at ${entry.statusLabel.toLowerCase()} status.`)}</p>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderCoveragePanel() {
+  if (!elements.coveragePanel) {
+    return;
+  }
+
+  const mainRecommendation = skillEngine.mainRecommendation;
+  elements.coveragePanel.innerHTML = `
+    <div class="panel-heading">
+      <div>
+        <p class="panel-heading__kicker">Route DNA</p>
+        <h2>Coverage + Recommendation Lab</h2>
+      </div>
+      <div class="route-toolbar__meta">
+        ${renderMetaTag(`Main pick ${mainRecommendation?.step?.name || "Offline"}`)}
+        ${renderMetaTag(`Live leak ${trainingEngine.primarySignal?.shortLabel || "Baseline"}`)}
+      </div>
+    </div>
+    <div class="route-analysis">
+      <div class="route-analysis__primary">
+        ${
+          mainRecommendation
+            ? `
+              <article class="route-branch route-branch--main">
+                <div class="route-branch__top">
+                  <div>
+                    <p class="panel-heading__kicker">Main Recommendation</p>
+                    <h3>${escapeHtml(mainRecommendation.step.name)}</h3>
+                  </div>
+                  <div class="route-branch__meta">
+                    ${renderBadge(mainRecommendation.label, "badge badge--training")}
+                    ${mainRecommendation.insight ? renderMasteryTag(mainRecommendation.insight, true) : ""}
+                  </div>
+                </div>
+                ${renderRouteDna(mainRecommendation.step, true)}
+                <p class="route-brief__copy">${escapeHtml(mainRecommendation.reason)}</p>
+                <div class="quest-card__actions">
+                  ${renderJumpButton("View On Route", typeof mainRecommendation.step.number === "number" ? mainRecommendation.step.anchorId : mainRecommendation.step.id, mainRecommendation.step.worldId, "button button--ghost")}
+                  ${renderLinkButton(mainRecommendation.step.levelUrl, "Open Level", "button")}
+                </div>
+              </article>
+            `
+            : '<p class="summary-panel__copy">No live route recommendation available.</p>'
+        }
+        <div class="route-analysis__alternates">
+          ${skillEngine.alternates.length
+            ? skillEngine.alternates.map((branch) => renderRouteAlternate(branch, true)).join("")
+            : '<p class="summary-panel__copy">Alternate branches appear once the route has enough unlocked options to compare.</p>'}
+        </div>
+      </div>
+      <div class="route-analysis__insights">
+        ${skillEngine.alerts.map((alert) => `
+          <article class="route-alert route-alert--${escapeHtml(alert.tone)}">
+            <p class="panel-heading__kicker">${escapeHtml(alert.tone === "warning" ? "Coverage Alert" : alert.tone === "good" ? "Coverage Stable" : "Coverage Read")}</p>
+            <h3>${escapeHtml(alert.title)}</h3>
+            <p class="summary-panel__copy">${escapeHtml(alert.body)}</p>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+    <div class="coverage-heatmap">
+      <div class="coverage-heatmap__top">
+        <div>
+          <p class="panel-heading__kicker">World Heatmap</p>
+          <h3>Route coverage by world</h3>
+        </div>
+        <p class="summary-panel__copy">Brighter cells mean that world leans harder on that mechanic. Bonus-heavy memory repairs stand out when the side branch is stronger than the main lane.</p>
+      </div>
+      <div class="coverage-heatmap__scroll">
+        <table class="coverage-heatmap__table">
+          <thead>
+            <tr>
+              <th>World</th>
+              ${SKILL_MAP_META.map((skill) => `<th>${escapeHtml(skill.shortLabel)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${skillEngine.worldRows.map((row) => `
+              <tr${row.current ? ' class="is-current"' : ""}>
+                <th>
+                  <strong>${escapeHtml(row.worldLabel)}</strong>
+                  <span>${escapeHtml(row.title)}</span>
+                </th>
+                ${SKILL_MAP_META.map((skill) => {
+                  const value = row.coverage[skill.id] || 0;
+                  const maxValue = skillEngine.worldMaxBySkill[skill.id] || value || 1;
+                  const intensity = clamp((value / maxValue) * 100, 12, 100);
+                  return `
+                    <td>
+                      <span class="coverage-cell" style="background: ${hexToRgba(skill.color, roundTo(0.1 + intensity / 125, 2))};">
+                        <strong>${Math.round(value)}</strong>
+                      </span>
+                    </td>
+                  `;
+                }).join("")}
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderMasteryMeter(insight, compact = false) {
   if (!insight) {
     return "";
@@ -3995,6 +5066,9 @@ function renderMainTracker(step) {
         ${insight?.freshness ? renderMetaTag(insight.freshness.label) : ""}
       </div>
       ${options.length ? renderStatusPicker(options, status, "set-main-status", "data-step-number", step.number) : ""}
+      ${renderRouteDna(step, true)}
+      ${(step.number === state.mainCleared + 1 || step.isBoss || step.milestone) ? renderRouteWhy(step, true) : ""}
+      ${renderRouteBranches(step, true)}
       ${renderNoteEditor(levelKey, step.name)}
       ${renderTrainingLogger(step)}
     </section>
@@ -4027,6 +5101,8 @@ function renderBonusTracker(step, pack) {
         ${insight?.freshness ? renderMetaTag(insight.freshness.label) : ""}
       </div>
       ${options.length ? renderStatusPicker(options, status, "set-bonus-status", "data-bonus-id", step.id) : ""}
+      ${renderRouteDna(step, true)}
+      ${renderRouteWhy(step, true)}
       ${renderNoteEditor(step.id, step.name)}
       ${renderTrainingLogger(step)}
     </section>
@@ -4116,6 +5192,7 @@ function renderRouteToolbar() {
         ${renderMetaTag(`${getWorldMainClears(selectedWorld)} / ${selectedWorld.levels.length} main`)}
         ${renderMetaTag(`${getWorldBonusClears(selectedWorld)} / ${selectedWorld.bonusCount} bonus`)}
         ${activeSignal ? renderMetaTag(`Adaptive ${activeSignal.shortLabel}`) : ""}
+        ${renderMetaTag(skillEngine.identity.title)}
         ${renderMetaTag(`Data ${freshness.label}`)}
       </div>
     </div>
@@ -4210,6 +5287,8 @@ function renderHistoryPanel() {
 
 function renderTrainingRecommendation(entry, compact = false) {
   const targetId = typeof entry.step.number === "number" ? entry.step.anchorId : entry.step.id;
+  const routeIntel = skillEngine.levelIntelByStepKey.get(getStepRouteKey(entry.step));
+  const dnaTags = routeIntel?.dna?.highlights?.slice(0, 2).map((highlight) => highlight.shortLabel).join(" / ");
   return `
     <button
       class="training-queue__item${compact ? " training-queue__item--compact" : ""}"
@@ -4223,6 +5302,7 @@ function renderTrainingRecommendation(entry, compact = false) {
       <span class="training-queue__copy">
         <strong>${escapeHtml(entry.step.name)}</strong>
         <span>${escapeHtml(entry.label)} / ${escapeHtml(entry.reason)}</span>
+        ${dnaTags ? `<span>${escapeHtml(`Route DNA: ${dnaTags}`)}</span>` : ""}
       </span>
     </button>
   `;
@@ -4687,6 +5767,7 @@ function renderObjectiveCard() {
         ${renderMetaTag(routeData.routeSummary)}
         ${renderMetaTag(activeBiome.label)}
         ${renderMetaTag(`Theme ${themeLabel}`)}
+        ${renderMetaTag(skillEngine.identity.title)}
         ${renderMetaTag(`${routeData.totalMain} main levels`)}
       </div>
     `;
@@ -4761,6 +5842,7 @@ function renderObjectiveCard() {
       ${renderMetaTag(routeData.routeSummary)}
       ${renderMetaTag(biome.label)}
       ${renderMetaTag(`Theme ${themeLabel}`)}
+      ${renderMetaTag(skillEngine.identity.title)}
       ${renderMetaTag(`${goalLabel} goal`)}
       ${renderMetaTag(`Current status ${getMainStepStatusLabel(currentStep)}`)}
       ${primarySignal ? renderMetaTag(`Adaptive ${primarySignal.shortLabel}`) : ""}
@@ -4858,6 +5940,8 @@ function renderNode(step, world) {
       ${renderMasteryMeter(insight, true)}
       <p class="stage-card__reason">${escapeHtml(step.reason)}</p>
       ${recommendation ? `<p class="stage-card__training">${escapeHtml(recommendation.reason)}</p>` : ""}
+      ${renderRouteDna(step, true)}
+      ${(step.number === state.mainCleared + 1 || step.isBoss || step.milestone) ? renderRouteWhy(step, true) : ""}
       <div class="stage-card__footer">
         <div class="stage-card__skills">${step.skills.map((skill) => renderMetaTag(skill)).join("")}</div>
         <div class="stage-card__actions">${actions}</div>
@@ -4916,6 +6000,8 @@ function renderBonusPack(pack, profile) {
               ${renderMasteryMeter(insight, true)}
               <p class="bonus-card__reason">${escapeHtml(step.reason)}</p>
               ${recommendation ? `<p class="stage-card__training">${escapeHtml(recommendation.reason)}</p>` : ""}
+              ${renderRouteDna(step, true)}
+              ${renderRouteWhy(step, true)}
               <div class="bonus-card__footer">
                 <div class="bonus-card__meta">${step.skills.map((skill) => renderMetaTag(skill)).join("")}</div>
                 <div class="stage-card__actions">
@@ -4948,6 +6034,8 @@ function renderCampaign() {
     .filter((signal) => [...world.levels, ...world.bonusPacks.flatMap((pack) => pack.steps)]
       .some((step) => getTrainingAffinities(step)[signal.id] > 0.6))
     .slice(0, 2);
+  const worldSkillRow = skillEngine.worldRows.find((entry) => entry.worldId === world.id) || null;
+  const worldAlternates = skillEngine.alternates.filter((branch) => branch.step.worldId === world.id).slice(0, 2);
 
   let summary = "Locked until earlier worlds are finished.";
   if (world.routeRole === "warmup") {
@@ -5047,6 +6135,36 @@ function renderCampaign() {
                 </div>
               </div>
             </section>
+            <section class="world__intel">
+              <p class="world__eyebrow">Coverage Read</p>
+              ${
+                worldSkillRow
+                  ? `
+                    <div class="world__tag-row">
+                      ${worldSkillRow.highlights.slice(0, 3).map((entry) => renderBadge(entry.shortLabel, "badge badge--training")).join("")}
+                    </div>
+                    <div class="route-dna__bars">
+                      ${worldSkillRow.highlights.slice(0, 3).map((entry) => `
+                        <div class="route-dna__row">
+                          <span class="route-dna__label">${escapeHtml(entry.shortLabel)}</span>
+                          <div class="route-dna__track">
+                            <span style="width: ${worldSkillRow.display[entry.id]}%; --skill-accent: ${entry.color};"></span>
+                          </div>
+                          <strong>${Math.round(worldSkillRow.display[entry.id])}</strong>
+                        </div>
+                      `).join("")}
+                    </div>
+                    <div class="world__intel-list">
+                      ${worldSkillRow.alerts.map((item) => `
+                        <div class="world__intel-row world__intel-row--stack">
+                          <span>${escapeHtml(item)}</span>
+                        </div>
+                      `).join("")}
+                    </div>
+                  `
+                  : '<p class="bonus-area__empty">Coverage data will appear once the route is built.</p>'
+              }
+            </section>
             <section class="world__intel world__intel--training">
               <p class="world__eyebrow">Training Read</p>
               ${
@@ -5058,6 +6176,14 @@ function renderCampaign() {
                 worldTrainingRecommendations.length
                   ? `<div class="training-queue training-queue--world">${worldTrainingRecommendations.map((entry) => renderTrainingRecommendation(entry, true)).join("")}</div>`
                   : '<p class="bonus-area__empty">No hot spots in this world yet. Use it for baseline reps or keep the main climb moving.</p>'
+              }
+            </section>
+            <section class="world__intel">
+              <p class="world__eyebrow">Route Branching</p>
+              ${
+                worldAlternates.length
+                  ? `<div class="route-analysis__alternates">${worldAlternates.map((branch) => renderRouteAlternate(branch, true)).join("")}</div>`
+                  : '<p class="bonus-area__empty">No alternate branches inside this world right now. The main lane is still the cleanest path.</p>'
               }
             </section>
             ${
@@ -5103,6 +6229,8 @@ function render(options = {}) {
   renderHeroStats();
   renderThemeSwitcher();
   renderObjectiveCard();
+  renderSkillMapPanel();
+  renderCoveragePanel();
   renderCoachPanel();
   renderRewardPanel();
   renderQuestsPanel();
