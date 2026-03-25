@@ -1,6 +1,6 @@
-const SAVE_VERSION = "path-to-1-v6";
-const LEGACY_SAVE_VERSIONS = new Set(["path-to-1-v4", "path-to-1-v5", SAVE_VERSION]);
-const ROUTE_VERSION = "4.0";
+const SAVE_VERSION = "path-to-1-v8";
+const LEGACY_SAVE_VERSIONS = new Set(["path-to-1-v4", "path-to-1-v5", "path-to-1-v6", "path-to-1-v7", SAVE_VERSION]);
+const ROUTE_VERSION = "4.1";
 const VERIFIED_AT = "March 21, 2026";
 const STORAGE_KEY = "gd-path-to-1-save";
 const DEFAULT_THEME = "arcade";
@@ -207,6 +207,133 @@ const BONUS_PROGRESS_OPTIONS = [
   { id: "practicing", label: "Practicing" },
   { id: "consistent", label: "Consistent" },
   { id: "cleared", label: "Cleared" },
+];
+
+const TRAINING_LOG_LIMIT = 180;
+const QUEST_LOG_LIMIT = 180;
+const TRAINING_SIGNAL_META = [
+  {
+    id: "wave",
+    label: "Wave consistency",
+    shortLabel: "Wave",
+    focus: "wave",
+    queueLabel: "Wave repair",
+    description: "Recent reps are breaking on wave-heavy or tunnel-style control.",
+  },
+  {
+    id: "chokepoint",
+    label: "Chokepoints",
+    shortLabel: "Chokepoint",
+    focus: "timings",
+    queueLabel: "Chokepoint drill",
+    description: "One or two repeated sections are blocking otherwise playable runs.",
+  },
+  {
+    id: "stamina",
+    label: "Stamina",
+    shortLabel: "Stamina",
+    focus: "endurance",
+    queueLabel: "Stamina build",
+    description: "Longer runs are fading before the level is over.",
+  },
+  {
+    id: "nerve",
+    label: "Nerve control",
+    shortLabel: "Nerves",
+    focus: "endurance",
+    queueLabel: "Nerve reset",
+    description: "Pressure is showing up once the attempt starts to matter.",
+  },
+  {
+    id: "ending",
+    label: "Failed endings",
+    shortLabel: "Endings",
+    focus: "endurance",
+    queueLabel: "Finish reps",
+    description: "You are reaching late runs but not closing them often enough.",
+  },
+];
+const TRAINING_SIGNAL_IDS = new Set(TRAINING_SIGNAL_META.map((signal) => signal.id));
+const TRAINING_SIGNAL_LOOKUP = Object.fromEntries(TRAINING_SIGNAL_META.map((signal) => [signal.id, signal]));
+const TRAINING_RESULT_OPTIONS = [
+  { id: "rough", label: "Rough Session" },
+  { id: "progress", label: "Progress Made" },
+  { id: "stable", label: "Stable Reps" },
+  { id: "clear", label: "Clear Or Finish" },
+];
+const TRAINING_FAIL_POINT_OPTIONS = [
+  { id: "opening", label: "Opening" },
+  { id: "mid", label: "Mid Run" },
+  { id: "ending", label: "Ending" },
+  { id: "clear", label: "Clear" },
+];
+const TRAINING_NOTE_KEYWORDS = {
+  wave: ["wave", "straight fly", "straight-fly", "straight line", "tunnel"],
+  chokepoint: ["choke", "chokepoint", "wall", "section", "transition", "part", "gate", "click pattern"],
+  stamina: ["stamina", "endurance", "xl", "long", "fatigue", "tired", "drain"],
+  nerve: ["nerve", "nerves", "panic", "pressure", "shaky", "freeze", "stress"],
+  ending: ["ending", "end", "last", "final", "closeout", "last click", "drop the ending"],
+};
+const SESSION_MODES = [
+  {
+    id: "30",
+    label: "30 Min",
+    description: "Fast reset with one focused push cycle.",
+    totalMinutes: 30,
+    blocks: { warmup: 6, push: 14, repair: 6, reclaim: 4 },
+  },
+  {
+    id: "60",
+    label: "60 Min",
+    description: "Balanced session with room for adaptation.",
+    totalMinutes: 60,
+    blocks: { warmup: 12, push: 26, repair: 14, reclaim: 8 },
+  },
+  {
+    id: "long",
+    label: "Long Grind",
+    description: "Extended block for real progression days.",
+    totalMinutes: 100,
+    blocks: { warmup: 15, push: 44, repair: 24, reclaim: 17 },
+  },
+];
+const SESSION_MODE_IDS = new Set(SESSION_MODES.map((mode) => mode.id));
+const MASTERY_TIERS = [
+  { min: 0, label: "Cold", shortLabel: "Cold", className: "cold" },
+  { min: 25, label: "Building", shortLabel: "Build", className: "building" },
+  { min: 45, label: "Stable", shortLabel: "Stable", className: "stable" },
+  { min: 65, label: "Locked In", shortLabel: "Locked", className: "locked" },
+  { min: 82, label: "Mastered", shortLabel: "Mastered", className: "mastered" },
+];
+const COACH_BADGES = [
+  {
+    id: "three-day-streak",
+    label: "Relay Active",
+    description: "Log sessions on 3 straight days.",
+    isEarned: (metrics) => metrics.trainingStreak >= 3,
+    progress: (metrics) => `${Math.min(metrics.trainingStreak, 3)} / 3 days`,
+  },
+  {
+    id: "quest-chain",
+    label: "Quest Chain",
+    description: "Finish 8 auto-generated quests.",
+    isEarned: (metrics) => metrics.questCount >= 8,
+    progress: (metrics) => `${Math.min(metrics.questCount, 8)} / 8 quests`,
+  },
+  {
+    id: "consistency-cache",
+    label: "Consistency Cache",
+    description: "Hold 5 levels at Locked In mastery or higher.",
+    isEarned: (metrics) => metrics.lockedInCount >= 5,
+    progress: (metrics) => `${Math.min(metrics.lockedInCount, 5)} / 5 levels`,
+  },
+  {
+    id: "boss-window",
+    label: "Boss Window",
+    description: "Push the next boss readiness score to 75.",
+    isEarned: (metrics) => metrics.readinessScore >= 75,
+    progress: (metrics) => `${Math.min(metrics.readinessScore, 75)} / 75 readiness`,
+  },
 ];
 
 function levelMeta(name, creator, levelId, difficulty, stars, length, extra = {}) {
@@ -1328,6 +1455,91 @@ function normalizeActivityLog(rawLog) {
     }));
 }
 
+function normalizeSessionMode(modeId) {
+  return SESSION_MODE_IDS.has(modeId) ? modeId : "60";
+}
+
+function normalizeCompletedQuestLog(rawLog) {
+  if (!Array.isArray(rawLog)) {
+    return [];
+  }
+
+  return rawLog
+    .filter((entry) => entry && typeof entry.id === "string" && typeof entry.at === "string")
+    .slice(0, QUEST_LOG_LIMIT)
+    .map((entry) => ({
+      id: entry.id.slice(0, 160),
+      at: entry.at,
+      xp: clamp(Number.parseInt(entry.xp, 10) || 0, 0, 9999),
+      label: typeof entry.label === "string" ? entry.label.slice(0, 80) : "Quest",
+    }));
+}
+
+function defaultCoachState(previous = {}) {
+  return {
+    sessionMode: normalizeSessionMode(previous?.sessionMode),
+    completedQuests: [],
+  };
+}
+
+function normalizeCoachState(rawCoach) {
+  return {
+    sessionMode: normalizeSessionMode(rawCoach?.sessionMode),
+    completedQuests: normalizeCompletedQuestLog(rawCoach?.completedQuests),
+  };
+}
+
+function normalizeTrainingIssues(rawIssues) {
+  if (!Array.isArray(rawIssues)) {
+    return [];
+  }
+
+  return Array.from(new Set(
+    rawIssues.filter((issue) => typeof issue === "string" && TRAINING_SIGNAL_IDS.has(issue)),
+  ));
+}
+
+function normalizeTrainingResult(rawResult) {
+  return TRAINING_RESULT_OPTIONS.some((option) => option.id === rawResult) ? rawResult : "progress";
+}
+
+function normalizeTrainingFailPoint(rawFailPoint) {
+  return TRAINING_FAIL_POINT_OPTIONS.some((option) => option.id === rawFailPoint) ? rawFailPoint : "mid";
+}
+
+function parseOptionalBoundedInteger(rawValue, min, max) {
+  if (rawValue == null) {
+    return null;
+  }
+
+  const normalized = String(rawValue).trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isFinite(parsed) ? clamp(parsed, min, max) : null;
+}
+
+function normalizeTrainingLog(rawLog) {
+  if (!Array.isArray(rawLog)) {
+    return [];
+  }
+
+  return rawLog
+    .filter((entry) => entry && typeof entry.metaKey === "string" && typeof entry.at === "string" && LEVEL_META[entry.metaKey])
+    .slice(0, TRAINING_LOG_LIMIT)
+    .map((entry) => ({
+      metaKey: entry.metaKey,
+      at: entry.at,
+      result: normalizeTrainingResult(entry.result),
+      failPoint: normalizeTrainingFailPoint(entry.failPoint),
+      bestPercent: parseOptionalBoundedInteger(entry.bestPercent, 0, 100),
+      attempts: parseOptionalBoundedInteger(entry.attempts, 0, 9999),
+      issues: normalizeTrainingIssues(entry.issues),
+    }));
+}
+
 function defaultState() {
   return {
     version: SAVE_VERSION,
@@ -1340,7 +1552,9 @@ function defaultState() {
     mainStepStatus: {},
     bonusStepStatus: {},
     levelNotes: {},
+    trainingLog: [],
     activityLog: [],
+    coach: defaultCoachState(),
   };
 }
 
@@ -1394,16 +1608,20 @@ function loadState() {
         }
       }
 
+      baseState.trainingLog = normalizeTrainingLog(raw?.trainingLog);
       baseState.activityLog = normalizeActivityLog(raw?.activityLog);
+      baseState.coach = normalizeCoachState(raw?.coach);
       baseState.page = normalizePage(raw?.page);
       baseState.selectedWorldId = routeData.preparedWorlds.some((world) => world.id === raw?.selectedWorldId)
         ? raw.selectedWorldId
         : getDefaultSelectedWorldId(routeData.preparedWorlds, baseState.mainCleared);
     } else {
+      baseState.coach = defaultCoachState();
       baseState.selectedWorldId = getDefaultSelectedWorldId(routeData.preparedWorlds, baseState.mainCleared);
     }
   } catch (error) {
     routeData = buildRouteData(DEFAULT_PROFILE);
+    baseState.coach = defaultCoachState();
     baseState.selectedWorldId = getDefaultSelectedWorldId(routeData.preparedWorlds, 0);
   }
 
@@ -1411,6 +1629,8 @@ function loadState() {
 }
 
 let state = loadState();
+let trainingEngine = buildTrainingEngine();
+let coachEngine = null;
 let setupOpen = !state.profile;
 let setupStep = 0;
 let setupDraft = {
@@ -1444,6 +1664,13 @@ if (routeData.preparedWorlds.some((world) => world.id === initialUrlState.worldI
 const elements = {
   mainContent: document.getElementById("main-content"),
   objectiveCard: document.getElementById("objective-card"),
+  coachPanel: document.getElementById("coach-panel"),
+  rewardPanel: document.getElementById("reward-panel"),
+  questsPanel: document.getElementById("quests-panel"),
+  plannerPanel: document.getElementById("planner-panel"),
+  masteryPanel: document.getElementById("mastery-panel"),
+  bossPanel: document.getElementById("boss-panel"),
+  trainingPanel: document.getElementById("training-panel"),
   worldNav: document.getElementById("world-nav"),
   campaign: document.getElementById("campaign"),
   mainProgressFill: document.getElementById("main-progress-fill"),
@@ -1480,6 +1707,7 @@ importInput.hidden = true;
 document.body.appendChild(importInput);
 
 function saveState() {
+  refreshDerivedState(true);
   state.version = SAVE_VERSION;
   state.page = normalizePage(currentPage);
   if (!routeData.preparedWorlds.some((world) => world.id === state.selectedWorldId)) {
@@ -1844,6 +2072,1092 @@ function getLevelNote(levelKey) {
   return state.levelNotes[levelKey] || "";
 }
 
+function getTrainingSignalMeta(signalId) {
+  return TRAINING_SIGNAL_LOOKUP[signalId] || TRAINING_SIGNAL_META[0];
+}
+
+function getStepFromNoteKey(levelKey) {
+  if (levelKey.startsWith("main-")) {
+    const stepNumber = Number.parseInt(levelKey.slice(5), 10);
+    return routeData.allMain[stepNumber - 1] || null;
+  }
+  return routeData.bonusSteps.find((step) => step.id === levelKey) || null;
+}
+
+function inferTrainingSignalsFromText(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return [];
+  }
+
+  return TRAINING_SIGNAL_META
+    .filter((signal) => (TRAINING_NOTE_KEYWORDS[signal.id] || []).some((keyword) => normalized.includes(normalizeText(keyword))))
+    .map((signal) => signal.id);
+}
+
+function getTrainingAffinities(step) {
+  const skillText = normalizeText(step.skills.join(" "));
+  const length = LEVEL_META[step.metaKey]?.length || step.length;
+  const affinities = {
+    wave: matchesFocus(step, "wave") ? 1.2 : 0,
+    chokepoint: matchesFocus(step, "timings") ? 0.7 : 0,
+    stamina: matchesFocus(step, "endurance") ? 0.55 : 0,
+    nerve: 0,
+    ending: 0,
+  };
+
+  if (["Long", "XL"].includes(length)) {
+    affinities.stamina += length === "XL" ? 1.05 : 0.75;
+    affinities.ending += 0.55;
+  }
+  if (step.isBoss || step.milestone) {
+    affinities.chokepoint += 0.25;
+    affinities.nerve += 0.55;
+    affinities.ending += 0.45;
+  }
+  if (step.placement) {
+    affinities.nerve += 0.35;
+  }
+  if (["precision", "timings", "reaction", "discipline", "execution", "control", "adaptation"].some((keyword) => skillText.includes(keyword))) {
+    affinities.chokepoint += 0.55;
+  }
+  if (["consistency", "focus", "composure", "run management", "routing"].some((keyword) => skillText.includes(keyword))) {
+    affinities.stamina += 0.35;
+  }
+  if (["nerve", "pressure", "focus", "composure"].some((keyword) => skillText.includes(keyword))) {
+    affinities.nerve += 0.75;
+  }
+  if (["late", "run management", "routing", "xl"].some((keyword) => skillText.includes(keyword))) {
+    affinities.ending += 0.45;
+  }
+
+  for (const key of Object.keys(affinities)) {
+    affinities[key] = clamp(affinities[key], 0, 1.6);
+  }
+
+  return affinities;
+}
+
+function createTrainingAggregate(metaKey) {
+  return {
+    metaKey,
+    sessions: 0,
+    attempts: 0,
+    bestPercent: null,
+    lastAt: null,
+    roughSessions: 0,
+    clearSessions: 0,
+    endingFails: 0,
+    issueScores: Object.fromEntries(TRAINING_SIGNAL_META.map((signal) => [signal.id, 0])),
+  };
+}
+
+function getOrCreateTrainingAggregate(store, metaKey) {
+  if (!store.has(metaKey)) {
+    store.set(metaKey, createTrainingAggregate(metaKey));
+  }
+  return store.get(metaKey);
+}
+
+function joinWithAnd(items) {
+  if (!items.length) {
+    return "";
+  }
+  if (items.length === 1) {
+    return items[0];
+  }
+  if (items.length === 2) {
+    return `${items[0]} and ${items[1]}`;
+  }
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+function getRecentTrainingSessions(metaKey, limit = 3) {
+  return state.trainingLog
+    .filter((entry) => entry.metaKey === metaKey)
+    .slice(0, limit);
+}
+
+function createTrainingLogEntry(metaKey, values = {}) {
+  if (!LEVEL_META[metaKey]) {
+    return null;
+  }
+
+  const result = normalizeTrainingResult(values.result);
+  const failPoint = result === "clear" ? "clear" : normalizeTrainingFailPoint(values.failPoint);
+  const bestPercent = parseOptionalBoundedInteger(values.bestPercent, 0, 100) ?? (result === "clear" ? 100 : null);
+  const attempts = parseOptionalBoundedInteger(values.attempts, 0, 9999);
+
+  return {
+    metaKey,
+    at: new Date().toISOString(),
+    result,
+    failPoint,
+    bestPercent,
+    attempts,
+    issues: normalizeTrainingIssues(values.issues),
+  };
+}
+
+function appendTrainingLogEntry(entry) {
+  if (!entry) {
+    return;
+  }
+
+  state.trainingLog = [
+    entry,
+    ...state.trainingLog,
+  ].slice(0, TRAINING_LOG_LIMIT);
+}
+
+function getBonusPackForStep(step) {
+  const world = routeData.preparedWorlds[step.worldIndex];
+  return world?.bonusPacks.find((pack) => pack.steps.some((candidate) => candidate.id === step.id)) || null;
+}
+
+function getTrainingCandidateStatus(step) {
+  if (typeof step.number === "number") {
+    return getMainStepDisplayStatus(step);
+  }
+
+  const pack = getBonusPackForStep(step);
+  return pack ? getBonusStepDisplayStatus(step, pack) : "locked";
+}
+
+function isTrainingCandidateUnlocked(step) {
+  if (typeof step.number === "number") {
+    return step.number <= state.mainCleared + 1;
+  }
+
+  const pack = getBonusPackForStep(step);
+  return Boolean(pack) && isBonusUnlocked(pack);
+}
+
+function buildTrainingEngine() {
+  const issueTotals = Object.fromEntries(TRAINING_SIGNAL_META.map((signal) => [signal.id, 0]));
+  const byMetaKey = new Map();
+  const now = Date.now();
+
+  for (const session of state.trainingLog) {
+    const aggregate = getOrCreateTrainingAggregate(byMetaKey, session.metaKey);
+    const sessionTime = new Date(session.at).getTime();
+    const ageInDays = Number.isFinite(sessionTime) ? Math.max(0, (now - sessionTime) / (1000 * 60 * 60 * 24)) : 30;
+    const recencyWeight = clamp(1.15 - ageInDays / 45, 0.22, 1.15);
+    const resultWeight = session.result === "rough"
+      ? 1.3
+      : session.result === "progress"
+        ? 1
+        : session.result === "stable"
+          ? 0.6
+          : 0.25;
+    const sessionWeight = recencyWeight * resultWeight;
+    const affinities = getTrainingAffinities({ ...LEVEL_META[session.metaKey], metaKey: session.metaKey, skills: [] });
+
+    aggregate.sessions += 1;
+    aggregate.attempts += session.attempts || 0;
+    aggregate.bestPercent = aggregate.bestPercent == null
+      ? session.bestPercent
+      : Math.max(aggregate.bestPercent, session.bestPercent ?? 0);
+    aggregate.lastAt = !aggregate.lastAt || new Date(session.at) > new Date(aggregate.lastAt) ? session.at : aggregate.lastAt;
+    if (session.result === "rough") {
+      aggregate.roughSessions += 1;
+    }
+    if (session.result === "clear") {
+      aggregate.clearSessions += 1;
+    }
+
+    for (const issue of session.issues) {
+      aggregate.issueScores[issue] += sessionWeight;
+      issueTotals[issue] += sessionWeight;
+    }
+
+    if (session.failPoint === "ending" && session.result !== "clear") {
+      aggregate.endingFails += 1;
+      aggregate.issueScores.ending += recencyWeight * 1.35;
+      aggregate.issueScores.nerve += recencyWeight * 0.8;
+      issueTotals.ending += recencyWeight * 1.35;
+      issueTotals.nerve += recencyWeight * 0.8;
+      if (affinities.stamina > 0.6) {
+        aggregate.issueScores.stamina += recencyWeight * 0.65;
+        issueTotals.stamina += recencyWeight * 0.65;
+      }
+    } else if (session.failPoint === "mid" && session.result === "rough") {
+      aggregate.issueScores.chokepoint += recencyWeight * 0.75;
+      issueTotals.chokepoint += recencyWeight * 0.75;
+    } else if (session.failPoint === "opening" && session.result === "rough" && affinities.wave > 0.6) {
+      aggregate.issueScores.wave += recencyWeight * 0.45;
+      issueTotals.wave += recencyWeight * 0.45;
+    }
+  }
+
+  for (const [levelKey, note] of Object.entries(state.levelNotes)) {
+    const step = getStepFromNoteKey(levelKey);
+    if (!step) {
+      continue;
+    }
+
+    const inferredSignals = inferTrainingSignalsFromText(note);
+    if (!inferredSignals.length) {
+      continue;
+    }
+
+    const aggregate = getOrCreateTrainingAggregate(byMetaKey, step.metaKey);
+    const boost = levelKey === getMainLevelKey(state.mainCleared + 1) ? 0.85 : 0.45;
+    for (const signalId of inferredSignals) {
+      aggregate.issueScores[signalId] += boost;
+      issueTotals[signalId] += boost;
+    }
+  }
+
+  for (const step of routeData.allMain) {
+    const status = getMainStepDisplayStatus(step);
+    if (!["practicing", "revisit", "consistent"].includes(status)) {
+      continue;
+    }
+
+    const aggregate = getOrCreateTrainingAggregate(byMetaKey, step.metaKey);
+    const affinities = getTrainingAffinities(step);
+    const boost = status === "practicing" ? 0.9 : status === "revisit" ? 0.65 : 0.25;
+    for (const signal of TRAINING_SIGNAL_META) {
+      if (affinities[signal.id] <= 0) {
+        continue;
+      }
+      const nextScore = affinities[signal.id] * boost;
+      aggregate.issueScores[signal.id] += nextScore;
+      issueTotals[signal.id] += nextScore;
+    }
+  }
+
+  for (const step of routeData.bonusSteps) {
+    const pack = getBonusPackForStep(step);
+    if (!pack) {
+      continue;
+    }
+
+    const status = getBonusStepDisplayStatus(step, pack);
+    if (!["practicing", "consistent"].includes(status)) {
+      continue;
+    }
+
+    const aggregate = getOrCreateTrainingAggregate(byMetaKey, step.metaKey);
+    const affinities = getTrainingAffinities(step);
+    const boost = status === "practicing" ? 0.8 : 0.2;
+    for (const signal of TRAINING_SIGNAL_META) {
+      if (affinities[signal.id] <= 0) {
+        continue;
+      }
+      const nextScore = affinities[signal.id] * boost;
+      aggregate.issueScores[signal.id] += nextScore;
+      issueTotals[signal.id] += nextScore;
+    }
+  }
+
+  const signals = TRAINING_SIGNAL_META
+    .map((signal) => ({
+      ...signal,
+      score: issueTotals[signal.id],
+      intensity: issueTotals[signal.id] >= 7 ? "High" : issueTotals[signal.id] >= 3.5 ? "Medium" : issueTotals[signal.id] >= 1.2 ? "Light" : "Low",
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  let activeSignals = signals.filter((signal) => signal.score >= 0.85).slice(0, 3);
+  if (!activeSignals.length && signals[0]?.score > 0) {
+    activeSignals = signals.slice(0, 1);
+  }
+
+  const recommendations = [...routeData.allMain, ...routeData.bonusSteps]
+    .filter((step) => isTrainingCandidateUnlocked(step))
+    .map((step) => {
+      const aggregate = byMetaKey.get(step.metaKey) || createTrainingAggregate(step.metaKey);
+      const affinities = getTrainingAffinities(step);
+      const status = getTrainingCandidateStatus(step);
+      const isCurrentMain = typeof step.number === "number" && step.number === state.mainCleared + 1;
+      let score = isCurrentMain ? 20 : 0;
+
+      if (status === "practicing") {
+        score += 18;
+      } else if (status === "revisit") {
+        score += 15;
+      } else if (status === "consistent") {
+        score += 7;
+      } else if (status === "cleared" || status === "optional") {
+        score -= 5;
+      }
+
+      activeSignals.forEach((signal, index) => {
+        const rankWeight = index === 0 ? 18 : index === 1 ? 12 : 8;
+        score += affinities[signal.id] * rankWeight;
+        score += Math.min(14, aggregate.issueScores[signal.id] * 3.5);
+      });
+
+      if (!activeSignals.length && matchesFocus(step, currentProfile().focus)) {
+        score += 6;
+      }
+
+      score += Math.min(16, aggregate.roughSessions * 4.5);
+      score += Math.min(18, aggregate.endingFails * 6);
+      if ((step.length === "Long" || step.length === "XL") && activeSignals.some((signal) => ["stamina", "ending"].includes(signal.id))) {
+        score += 6;
+      }
+      if ((step.isBoss || step.milestone) && activeSignals.some((signal) => ["nerve", "ending", "chokepoint"].includes(signal.id))) {
+        score += 6;
+      }
+      if (typeof step.number !== "number") {
+        score += 2;
+      }
+      if (aggregate.clearSessions && aggregate.roughSessions === 0 && status === "cleared") {
+        score -= Math.min(10, aggregate.clearSessions * 2);
+      }
+
+      const dominantSignal = activeSignals
+        .map((signal) => ({
+          signal,
+          value: affinities[signal.id] * 2 + aggregate.issueScores[signal.id],
+        }))
+        .sort((left, right) => right.value - left.value)[0]?.signal || null;
+      const reasonParts = [];
+      if (dominantSignal) {
+        reasonParts.push(`targets ${dominantSignal.label.toLowerCase()}`);
+      }
+      if (aggregate.endingFails > 0) {
+        reasonParts.push(`${aggregate.endingFails} late miss${aggregate.endingFails === 1 ? "" : "es"} logged`);
+      } else if (aggregate.roughSessions > 1) {
+        reasonParts.push(`${aggregate.roughSessions} rough sessions logged`);
+      }
+      if (status === "practicing") {
+        reasonParts.push("already in your practice rotation");
+      } else if (isCurrentMain) {
+        reasonParts.push("current main gate");
+      }
+
+      return {
+        step,
+        score,
+        label: dominantSignal?.queueLabel || (isCurrentMain ? "Main push" : typeof step.number === "number" ? "Revisit" : "Bonus drill"),
+        reason: reasonParts.length
+          ? `${reasonParts[0].charAt(0).toUpperCase()}${reasonParts[0].slice(1)}${reasonParts.length > 1 ? `. ${reasonParts.slice(1).join(". ")}.` : "."}`
+          : "Keeps pressure on your current route without drifting away from the ladder.",
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 6)
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }));
+
+  const recommendationByMetaKey = new Map(recommendations.map((entry) => [entry.step.metaKey, entry]));
+  const totalSessions = state.trainingLog.length;
+  const trackedLevels = Array.from(byMetaKey.values()).filter((aggregate) => {
+    return aggregate.sessions > 0 || Object.values(aggregate.issueScores).some((score) => score >= 0.85);
+  }).length;
+  const endingFailures = state.trainingLog.filter((session) => session.failPoint === "ending" && session.result !== "clear").length;
+  const recentSessions = state.trainingLog.slice(0, 4).map((session) => ({
+    ...session,
+    level: LEVEL_META[session.metaKey],
+  }));
+  const primarySignal = activeSignals[0] || null;
+  const summary = totalSessions || trackedLevels
+    ? `${joinWithAnd(activeSignals.map((signal) => signal.label.toLowerCase())) || "Recent sessions"} are showing up most right now. ${recommendations[0] ? `${recommendations[0].step.name} is the best next rep.` : "Keep feeding the engine more sessions."}`
+    : "Start logging sessions in any tracker panel. The engine will learn your weak spots and build a live practice queue on top of the route.";
+
+  return {
+    engaged: Boolean(totalSessions || trackedLevels),
+    summary,
+    totalSessions,
+    trackedLevels,
+    endingFailures,
+    activeSignals,
+    signals,
+    recommendations,
+    recommendationByMetaKey,
+    byMetaKey,
+    primarySignal,
+    recentSessions,
+    suggestedFocus: primarySignal ? getTrainingSignalMeta(primarySignal.id).focus : currentProfile().focus,
+  };
+}
+
+function getLocalDayKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function getAgeInDays(value, now = Date.now()) {
+  const parsed = new Date(value).getTime();
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.max(0, Math.floor((now - parsed) / (1000 * 60 * 60 * 24)));
+}
+
+function average(values) {
+  if (!values.length) {
+    return 0;
+  }
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function getAllRouteSteps() {
+  return [...routeData.allMain, ...routeData.bonusSteps];
+}
+
+function getStepRouteKey(step) {
+  return typeof step.number === "number" ? getMainLevelKey(step.number) : step.id;
+}
+
+function getStepDisplayStatus(step) {
+  if (typeof step.number === "number") {
+    return getMainStepDisplayStatus(step);
+  }
+
+  const pack = getBonusPackForStep(step);
+  return pack ? getBonusStepDisplayStatus(step, pack) : "locked";
+}
+
+function getStepStatusLabel(step) {
+  if (typeof step.number === "number") {
+    return getMainStepStatusLabel(step);
+  }
+
+  const pack = getBonusPackForStep(step);
+  return pack ? getBonusStepStatusLabel(step, pack) : "Locked";
+}
+
+function isStepCleared(step) {
+  return typeof step.number === "number" ? step.number <= state.mainCleared : Boolean(state.bonusCleared[step.id]);
+}
+
+function getRecentSessionsForDay(metaKey, dayKey) {
+  return state.trainingLog.filter((entry) => entry.metaKey === metaKey && getLocalDayKey(entry.at) === dayKey);
+}
+
+function getTrainingDayStreak() {
+  const availableDays = new Set(state.trainingLog.map((entry) => getLocalDayKey(entry.at)).filter(Boolean));
+  if (!availableDays.size) {
+    return 0;
+  }
+
+  let streak = 0;
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  while (availableDays.has(getLocalDayKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function getMasteryTier(score) {
+  return MASTERY_TIERS.reduce((tier, candidate) => (score >= candidate.min ? candidate : tier), MASTERY_TIERS[0]);
+}
+
+function getNextMasteryTier(score) {
+  return MASTERY_TIERS.find((tier) => tier.min > score) || null;
+}
+
+function getFreshnessProfile(status, aggregate, bestPercent) {
+  const isClearState = ["cleared", "revisit"].includes(status);
+  if (!aggregate.lastAt) {
+    return {
+      score: isClearState ? 22 : bestPercent != null ? 44 : 58,
+      label: isClearState ? "Unrefreshed" : bestPercent != null ? "Open" : "Untouched",
+      daysAgo: null,
+      stale: isClearState,
+      rusty: false,
+      summary: isClearState ? "No recent reclaim reps logged." : "No recent reps logged yet.",
+    };
+  }
+
+  const daysAgo = getAgeInDays(aggregate.lastAt);
+  let score = 100 - (daysAgo || 0) * (isClearState ? 4.6 : 2.7);
+  if (aggregate.clearSessions > 0) {
+    score += 7;
+  }
+  if (!isClearState && bestPercent != null) {
+    score += clamp((bestPercent - 55) * 0.15, -6, 8);
+  }
+  score = clamp(Math.round(score), 12, 100);
+
+  let label = "Hot";
+  if ((daysAgo || 0) >= 3) {
+    label = "Fresh";
+  }
+  if ((daysAgo || 0) >= 8) {
+    label = "Cooling";
+  }
+  if ((daysAgo || 0) >= 16) {
+    label = isClearState ? "Stale" : "Cold";
+  }
+  if ((daysAgo || 0) >= 32) {
+    label = isClearState ? "Rusty" : "Dormant";
+  }
+
+  return {
+    score,
+    label,
+    daysAgo,
+    stale: isClearState && (daysAgo || 0) >= 14,
+    rusty: isClearState && (daysAgo || 0) >= 32,
+    summary: daysAgo == null
+      ? "No recent activity recorded."
+      : `${daysAgo} day${daysAgo === 1 ? "" : "s"} since the last logged rep.`,
+  };
+}
+
+function buildMasteryInsight(step) {
+  const aggregate = trainingEngine.byMetaKey.get(step.metaKey) || createTrainingAggregate(step.metaKey);
+  const status = getStepDisplayStatus(step);
+  const statusLabel = getStepStatusLabel(step);
+  const unlocked = isTrainingCandidateUnlocked(step);
+  const cleared = isStepCleared(step);
+  const bestPercent = aggregate.bestPercent ?? (cleared ? 100 : null);
+  const affinities = getTrainingAffinities(step);
+  const freshness = getFreshnessProfile(status, aggregate, bestPercent);
+  const stableSessions = Math.max(0, aggregate.sessions - aggregate.roughSessions);
+  const issueEntries = TRAINING_SIGNAL_META.map((signal) => ({
+    ...signal,
+    value: (aggregate.issueScores[signal.id] || 0) + (affinities[signal.id] || 0) * 0.45,
+  })).sort((left, right) => right.value - left.value);
+  const dominantIssue = issueEntries[0]?.value >= 0.75 ? issueEntries[0] : null;
+
+  const baseByStatus = {
+    locked: 4,
+    optional: 10,
+    ready: 18,
+    practicing: 30,
+    consistent: 42,
+    revisit: 40,
+    cleared: 42,
+  };
+
+  let masteryScore = baseByStatus[status] ?? 12;
+  masteryScore += bestPercent != null ? bestPercent * 0.24 : 0;
+  masteryScore += Math.min(14, aggregate.sessions * 2.1);
+  masteryScore += Math.min(12, aggregate.clearSessions * 6);
+  masteryScore += Math.min(10, stableSessions * 1.1);
+  masteryScore -= Math.min(12, aggregate.roughSessions * 2.3);
+  masteryScore -= Math.min(10, aggregate.endingFails * 1.9);
+  masteryScore += Math.round((freshness.score - 50) * (["cleared", "revisit"].includes(status) || aggregate.clearSessions > 0 ? 0.36 : 0.12));
+  if (status === "revisit") {
+    masteryScore -= 8;
+  }
+  if (status === "locked") {
+    masteryScore = Math.min(masteryScore, 14);
+  }
+  masteryScore = clamp(Math.round(masteryScore), 0, 100);
+
+  const tier = getMasteryTier(masteryScore);
+  const nextTier = getNextMasteryTier(masteryScore);
+  const summaryParts = [];
+  if (bestPercent != null && bestPercent < 100) {
+    summaryParts.push(`best ${bestPercent}%`);
+  } else if (cleared) {
+    summaryParts.push(freshness.stale ? "clear is cooling off" : "clear is still fresh");
+  }
+  if (aggregate.roughSessions > 0) {
+    summaryParts.push(`${aggregate.roughSessions} rough session${aggregate.roughSessions === 1 ? "" : "s"}`);
+  }
+  if (dominantIssue) {
+    summaryParts.push(`${dominantIssue.shortLabel.toLowerCase()} is still leaking`);
+  }
+  if (!summaryParts.length) {
+    summaryParts.push(unlocked ? "ready for a real read" : "still locked behind the main route");
+  }
+
+  let reclaimWeight = -999;
+  if (unlocked && (cleared || status === "revisit" || bestPercent >= 85 || status === "consistent")) {
+    reclaimWeight = (100 - freshness.score) * 0.78;
+    if (status === "revisit") {
+      reclaimWeight += 18;
+    }
+    if (aggregate.clearSessions > 0) {
+      reclaimWeight += 6;
+    }
+    if (aggregate.endingFails > 0) {
+      reclaimWeight += 4;
+    }
+    if (freshness.daysAgo != null) {
+      reclaimWeight += Math.min(12, freshness.daysAgo * 0.45);
+    }
+    if (!cleared && bestPercent >= 90) {
+      reclaimWeight += 10;
+    }
+  }
+
+  let repairWeight = unlocked ? 0 : -999;
+  if (unlocked) {
+    trainingEngine.activeSignals.forEach((signal, index) => {
+      const weight = index === 0 ? 1 : index === 1 ? 0.72 : 0.5;
+      repairWeight += ((affinities[signal.id] || 0) * 12 + (aggregate.issueScores[signal.id] || 0) * 8) * weight;
+    });
+    if (status === "practicing") {
+      repairWeight += 8;
+    }
+    if (status === "revisit") {
+      repairWeight += 4;
+    }
+  }
+
+  return {
+    step,
+    aggregate,
+    affinities,
+    status,
+    statusLabel,
+    unlocked,
+    cleared,
+    bestPercent,
+    freshness,
+    masteryScore,
+    tier,
+    nextTier,
+    dominantIssue,
+    summary: `${summaryParts[0].charAt(0).toUpperCase()}${summaryParts[0].slice(1)}${summaryParts.length > 1 ? `. ${summaryParts.slice(1).join(". ")}.` : "."}`,
+    repairWeight,
+    reclaimWeight,
+  };
+}
+
+function buildQuestProgress(metaKey, dayKey, evaluator, fallback) {
+  const todaysSessions = getRecentSessionsForDay(metaKey, dayKey);
+  const qualifyingSessions = todaysSessions.filter(evaluator);
+  return {
+    todaysSessions,
+    qualifyingSessions,
+    criteriaMet: qualifyingSessions.length > 0,
+    label: qualifyingSessions.length
+      ? `${qualifyingSessions.length} banked today`
+      : fallback,
+  };
+}
+
+function pickDistinctInsight(candidates, excludedKeys = new Set()) {
+  return candidates.find((insight) => !excludedKeys.has(insight.step.metaKey)) || candidates[0] || null;
+}
+
+function scoreBossSupport(candidate, bossInsight, worldId) {
+  const overlap = TRAINING_SIGNAL_META.reduce((total, signal) => {
+    return total + Math.min(candidate.affinities[signal.id] || 0, bossInsight.affinities[signal.id] || 0) * 12;
+  }, 0);
+
+  return overlap
+    + (candidate.step.worldId === worldId ? 5 : 0)
+    + (candidate.step.number === state.mainCleared + 1 ? 7 : 0)
+    + (100 - candidate.masteryScore) * 0.12
+    + (candidate.freshness.stale ? 4 : 0);
+}
+
+function buildBossReadiness(insightByMetaKey, excludedKeys = new Set()) {
+  const currentStep = getCurrentStep();
+  const targetWorld = currentStep
+    ? getCurrentWorld()
+    : routeData.preparedWorlds[routeData.preparedWorlds.length - 1];
+  const bossStep = targetWorld.levels[targetWorld.levels.length - 1];
+  const bossInsight = insightByMetaKey.get(bossStep.metaKey);
+  const worldInsights = targetWorld.levels.map((step) => insightByMetaKey.get(step.metaKey)).filter(Boolean);
+  const unlockedWorldInsights = worldInsights.filter((insight) => insight.unlocked || insight.step.metaKey === bossStep.metaKey);
+  const currentInsight = currentStep ? insightByMetaKey.get(currentStep.metaKey) : bossInsight;
+
+  if (!currentStep) {
+    return {
+      world: targetWorld,
+      boss: bossStep,
+      bossInsight,
+      prepInsight: bossInsight,
+      score: 100,
+      label: "Primed",
+      helping: ["The active route is already cleared through the final gate.", `${bossStep.name} is fully banked in the current save.`],
+      blockers: [],
+    };
+  }
+
+  const feederTotal = Math.max(1, targetWorld.levels.length - 1);
+  const clearedFeeders = targetWorld.levels.filter((step) => step.number < bossStep.number && step.number <= state.mainCleared).length;
+  const foundationMastery = average(unlockedWorldInsights.map((insight) => insight.masteryScore));
+  const recentWorldSessions = state.trainingLog.filter((entry) => {
+    const step = worldInsights.find((insight) => insight.step.metaKey === entry.metaKey);
+    const ageInDays = getAgeInDays(entry.at);
+    return Boolean(step) && ageInDays != null && ageInDays <= 10;
+  }).length;
+  const leakPenalty = trainingEngine.activeSignals.reduce((total, signal, index) => {
+    const weight = index === 0 ? 10 : index === 1 ? 6 : 3;
+    return total + (bossInsight?.affinities[signal.id] || 0) * weight;
+  }, 0);
+  const stalePenalty = worldInsights.filter((insight) => insight.cleared && insight.freshness.stale).length * 4;
+  const gatePenalty = currentInsight && currentInsight.masteryScore < 55 ? (55 - currentInsight.masteryScore) * 0.35 : 0;
+  const score = clamp(Math.round(
+    16
+      + (clearedFeeders / feederTotal) * 32
+      + foundationMastery * 0.24
+      + (currentInsight?.masteryScore || 0) * 0.16
+      + Math.min(12, recentWorldSessions * 3)
+      - leakPenalty
+      - stalePenalty
+      - gatePenalty
+  ), 0, 100);
+
+  const helping = [];
+  if (clearedFeeders > 0) {
+    helping.push(`${clearedFeeders} of ${feederTotal} feeder stage${feederTotal === 1 ? "" : "s"} are already cleared.`);
+  }
+  if (foundationMastery >= 55) {
+    helping.push(`The world floor is averaging ${Math.round(foundationMastery)} mastery.`);
+  }
+  if (recentWorldSessions > 0) {
+    helping.push(`${recentWorldSessions} recent session${recentWorldSessions === 1 ? "" : "s"} were logged inside this boss arc.`);
+  }
+
+  const blockers = [];
+  if (trainingEngine.primarySignal && (bossInsight?.affinities[trainingEngine.primarySignal.id] || 0) > 0.6) {
+    blockers.push(`${trainingEngine.primarySignal.label} overlaps with what ${bossStep.name} asks from you.`);
+  }
+  if (currentInsight && currentInsight.masteryScore < 55) {
+    blockers.push(`${currentInsight.step.name} is only at ${currentInsight.tier.label.toLowerCase()} mastery right now.`);
+  }
+  const staleWorldClears = worldInsights.filter((insight) => insight.cleared && insight.freshness.stale).length;
+  if (staleWorldClears > 0) {
+    blockers.push(`${staleWorldClears} earlier clear${staleWorldClears === 1 ? "" : "s"} in this world are going cold.`);
+  }
+  if (!recentWorldSessions) {
+    blockers.push("No recent world reps are in the log yet.");
+  }
+
+  const prepCandidates = unlockedWorldInsights
+    .filter((insight) => insight.step.metaKey !== bossStep.metaKey)
+    .sort((left, right) => scoreBossSupport(right, bossInsight, targetWorld.id) - scoreBossSupport(left, bossInsight, targetWorld.id));
+  const prepInsight = pickDistinctInsight(prepCandidates, excludedKeys) || currentInsight || bossInsight;
+  let label = "Window Closed";
+  if (score >= 90) {
+    label = "Primed";
+  } else if (score >= 75) {
+    label = "Ready";
+  } else if (score >= 60) {
+    label = "Approaching";
+  } else if (score >= 40) {
+    label = "Building";
+  }
+
+  return {
+    world: targetWorld,
+    boss: bossStep,
+    bossInsight,
+    prepInsight,
+    score,
+    label,
+    helping: helping.length ? helping : ["The next boss gate is still mostly unbuilt."],
+    blockers: blockers.length ? blockers : ["No major blockers are standing out from the current log."],
+  };
+}
+
+function buildSessionPlan(mode, pushQuest, weaknessQuest, reclaimQuest, insightByMetaKey) {
+  const excludedWarmupKeys = new Set(
+    [pushQuest?.target?.metaKey, weaknessQuest?.target?.metaKey, reclaimQuest?.target?.metaKey].filter(Boolean),
+  );
+  const warmupCandidates = Array.from(insightByMetaKey.values())
+    .filter((insight) => insight.unlocked && (insight.cleared || insight.status === "consistent" || insight.status === "practicing"))
+    .sort((left, right) => {
+      const leftScore = (left.cleared ? 18 : 8) + Math.max(0, 18 - Math.abs(left.masteryScore - 62) * 0.35) + left.freshness.score * 0.08;
+      const rightScore = (right.cleared ? 18 : 8) + Math.max(0, 18 - Math.abs(right.masteryScore - 62) * 0.35) + right.freshness.score * 0.08;
+      return rightScore - leftScore;
+    });
+  const warmupInsight = pickDistinctInsight(warmupCandidates, excludedWarmupKeys)
+    || insightByMetaKey.get(pushQuest?.target?.metaKey)
+    || Array.from(insightByMetaKey.values())[0]
+    || null;
+  const pushInsight = insightByMetaKey.get(pushQuest?.target?.metaKey) || warmupInsight;
+  const repairInsight = insightByMetaKey.get(weaknessQuest?.target?.metaKey) || pushInsight;
+  const reclaimInsight = insightByMetaKey.get(reclaimQuest?.target?.metaKey) || repairInsight;
+
+  return {
+    mode,
+    blocks: [
+      {
+        id: "warmup",
+        label: "Warmup",
+        minutes: mode.blocks.warmup,
+        insight: warmupInsight,
+        copy: warmupInsight
+          ? `Open with ${warmupInsight.step.name} so inputs settle before the route gate.`
+          : "Use a comfortable clear to settle inputs.",
+      },
+      {
+        id: "push",
+        label: "Main Push",
+        minutes: mode.blocks.push,
+        insight: pushInsight,
+        copy: pushQuest?.goal || "Put the longest block into the live route gate.",
+      },
+      {
+        id: "repair",
+        label: "Weakness Repair",
+        minutes: mode.blocks.repair,
+        insight: repairInsight,
+        copy: weaknessQuest?.goal || "Patch the loudest leak with a focused drill block.",
+      },
+      {
+        id: "reclaim",
+        label: "Consistency Reclaim",
+        minutes: mode.blocks.reclaim,
+        insight: reclaimInsight,
+        copy: reclaimQuest?.goal || "Finish on a reclaim to keep old progress from going cold.",
+      },
+    ],
+  };
+}
+
+function buildCoachEngine() {
+  const todayKey = getLocalDayKey();
+  const completedQuestMap = new Map(state.coach.completedQuests.map((entry) => [entry.id, entry]));
+  const insights = getAllRouteSteps().map((step) => buildMasteryInsight(step));
+  const insightByMetaKey = new Map(insights.map((insight) => [insight.step.metaKey, insight]));
+  const currentStep = getCurrentStep() || routeData.allMain[routeData.allMain.length - 1] || null;
+  const currentInsight = currentStep ? insightByMetaKey.get(currentStep.metaKey) || null : null;
+  const activeWorld = currentStep ? getCurrentWorld() : routeData.preparedWorlds[routeData.preparedWorlds.length - 1];
+
+  const pushTarget = currentStep || routeData.allMain[routeData.allMain.length - 1];
+  const pushProgress = buildQuestProgress(pushTarget?.metaKey, todayKey, (session) => ["progress", "stable", "clear"].includes(session.result), "1 solid push session");
+  const pushQuest = pushTarget ? {
+    id: `quest-${todayKey}-push-${pushTarget.metaKey}`,
+    type: "push",
+    label: "Today's Push",
+    shortLabel: "Push",
+    xp: 40,
+    goal: currentInsight?.bestPercent != null && currentInsight.bestPercent >= 90
+      ? "Close the run or bank one late stable rep."
+      : currentInsight?.bestPercent != null && currentInsight.bestPercent >= 70
+        ? "Extend the best and stabilize the closeout."
+        : "Get real attempts on the live gate.",
+    target: pushTarget,
+    targetInsight: currentInsight,
+    reason: currentInsight?.bestPercent != null
+      ? `${pushTarget.name} is the live route gate with ${currentInsight.bestPercent}% already on file.`
+      : `${pushTarget.name} is the live route gate, so this is still the cleanest place to spend your main block.`,
+    criteriaMet: pushProgress.criteriaMet,
+    progressText: pushProgress.label,
+  } : null;
+
+  const excludedKeys = new Set(pushQuest?.target?.metaKey ? [pushQuest.target.metaKey] : []);
+  const primarySignal = trainingEngine.primarySignal;
+  const weaknessCandidates = insights
+    .filter((insight) => insight.unlocked)
+    .sort((left, right) => right.repairWeight - left.repairWeight);
+  const weaknessInsight = pickDistinctInsight(
+    primarySignal
+      ? weaknessCandidates.filter((insight) => (insight.affinities[primarySignal.id] || 0) > 0.35 || (insight.aggregate.issueScores[primarySignal.id] || 0) > 0.8)
+      : weaknessCandidates,
+    excludedKeys,
+  ) || currentInsight;
+  if (weaknessInsight?.step?.metaKey) {
+    excludedKeys.add(weaknessInsight.step.metaKey);
+  }
+  const weaknessProgress = weaknessInsight
+    ? buildQuestProgress(
+      weaknessInsight.step.metaKey,
+      todayKey,
+      (session) => {
+        if (primarySignal?.id && session.issues.includes(primarySignal.id)) {
+          return true;
+        }
+        return ["progress", "stable", "clear"].includes(session.result);
+      },
+      primarySignal ? `1 ${primarySignal.shortLabel.toLowerCase()} repair rep` : "1 focused drill rep",
+    )
+    : null;
+  const weaknessQuest = weaknessInsight ? {
+    id: `quest-${todayKey}-repair-${weaknessInsight.step.metaKey}`,
+    type: "repair",
+    label: "Weakness Repair",
+    shortLabel: "Repair",
+    xp: 30,
+    goal: primarySignal
+      ? `Log one focused ${primarySignal.shortLabel.toLowerCase()} repair block.`
+      : "Log one focused repair block.",
+    target: weaknessInsight.step,
+    targetInsight: weaknessInsight,
+    reason: primarySignal
+      ? `${primarySignal.label} is the loudest leak, and ${weaknessInsight.step.name} is the best live rep for it.`
+      : `${weaknessInsight.step.name} is the best live level for sharpening the current route without drifting off-course.`,
+    criteriaMet: weaknessProgress?.criteriaMet || false,
+    progressText: weaknessProgress?.label || "Needs one repair rep",
+  } : null;
+
+  const reclaimCandidates = insights
+    .filter((insight) => insight.unlocked && insight.reclaimWeight > -900)
+    .sort((left, right) => right.reclaimWeight - left.reclaimWeight);
+  const reclaimInsight = pickDistinctInsight(reclaimCandidates, excludedKeys)
+    || insights.find((insight) => insight.cleared && insight.unlocked)
+    || currentInsight;
+  if (reclaimInsight?.step?.metaKey) {
+    excludedKeys.add(reclaimInsight.step.metaKey);
+  }
+  const reclaimProgress = reclaimInsight
+    ? buildQuestProgress(reclaimInsight.step.metaKey, todayKey, (session) => ["stable", "clear"].includes(session.result), "1 stable reclaim rep")
+    : null;
+  const reclaimQuest = reclaimInsight ? {
+    id: `quest-${todayKey}-reclaim-${reclaimInsight.step.metaKey}`,
+    type: "reclaim",
+    label: "Consistency Reclaim",
+    shortLabel: "Reclaim",
+    xp: 26,
+    goal: reclaimInsight.cleared
+      ? "Bank one stable revisit so the clear stays fresh."
+      : "Bank one stable rep on the near-clear.",
+    target: reclaimInsight.step,
+    targetInsight: reclaimInsight,
+    reason: reclaimInsight.status === "revisit"
+      ? `${reclaimInsight.step.name} is already flagged for revisit and its mastery is slipping.`
+      : reclaimInsight.freshness.daysAgo != null
+        ? `${reclaimInsight.step.name} has gone ${reclaimInsight.freshness.daysAgo} days without a reclaim rep.`
+        : `${reclaimInsight.step.name} is close enough to matter, but not stable enough to leave alone.`,
+    criteriaMet: reclaimProgress?.criteriaMet || false,
+    progressText: reclaimProgress?.label || "Needs one stable reclaim rep",
+  } : null;
+
+  const bossReadiness = buildBossReadiness(insightByMetaKey, excludedKeys);
+  const bossTargetInsight = bossReadiness.prepInsight || bossReadiness.bossInsight;
+  const bossProgress = bossTargetInsight
+    ? buildQuestProgress(bossTargetInsight.step.metaKey, todayKey, (session) => ["progress", "stable", "clear"].includes(session.result), "1 boss-lane prep rep")
+    : null;
+  const bossQuest = bossTargetInsight ? {
+    id: `quest-${todayKey}-boss-${bossTargetInsight.step.metaKey}`,
+    type: "boss",
+    label: "Boss Readiness",
+    shortLabel: "Boss",
+    xp: 34,
+    goal: `Log one prep block tied to ${bossReadiness.boss.name}.`,
+    target: bossTargetInsight.step,
+    targetInsight: bossTargetInsight,
+    reason: bossTargetInsight.step.metaKey === bossReadiness.boss.metaKey
+      ? `${bossReadiness.boss.name} is the next world boss, so at least one direct prep rep should land today.`
+      : `${bossReadiness.boss.name} is the next boss gate, and ${bossTargetInsight.step.name} is the closest live prep level for it.`,
+    criteriaMet: bossProgress?.criteriaMet || false,
+    progressText: bossProgress?.label || "Needs one boss-lane prep rep",
+  } : null;
+
+  const quests = [pushQuest, weaknessQuest, reclaimQuest, bossQuest]
+    .filter(Boolean)
+    .map((quest) => {
+      const completedEntry = completedQuestMap.get(quest.id) || null;
+      const complete = Boolean(completedEntry || quest.criteriaMet);
+      return {
+        ...quest,
+        completedEntry,
+        complete,
+        stateLabel: complete ? "Complete" : "Live",
+        rewardLabel: `+${quest.xp} XP`,
+      };
+    });
+
+  const sessionMode = SESSION_MODES.find((mode) => mode.id === normalizeSessionMode(state.coach.sessionMode)) || SESSION_MODES[1];
+  const sessionPlan = buildSessionPlan(sessionMode, pushQuest, weaknessQuest, reclaimQuest, insightByMetaKey);
+  const todaySessions = state.trainingLog.filter((entry) => getLocalDayKey(entry.at) === todayKey);
+  const todayQuestXp = state.coach.completedQuests
+    .filter((entry) => getLocalDayKey(entry.at) === todayKey)
+    .reduce((total, entry) => total + entry.xp, 0);
+  const totalQuestXp = state.coach.completedQuests.reduce((total, entry) => total + entry.xp, 0);
+  const clearXp = state.mainCleared * 28 + getBonusClearsCount() * 18;
+  const sessionXp = state.trainingLog.length * 10;
+  const totalXp = clearXp + sessionXp + totalQuestXp;
+  const level = Math.floor(totalXp / 180) + 1;
+  const levelFloor = (level - 1) * 180;
+  const nextLevelAt = level * 180;
+  const questCompleteCount = quests.filter((quest) => quest.complete).length;
+  const masteryHighlights = Array.from(new Set([
+    pushQuest?.target?.metaKey,
+    weaknessQuest?.target?.metaKey,
+    reclaimQuest?.target?.metaKey,
+    bossReadiness.boss?.metaKey,
+    bossReadiness.prepInsight?.step?.metaKey,
+  ].filter(Boolean))).map((metaKey) => insightByMetaKey.get(metaKey)).filter(Boolean);
+
+  if (masteryHighlights.length < 4) {
+    insights
+      .filter((insight) => insight.unlocked && !masteryHighlights.some((entry) => entry.step.metaKey === insight.step.metaKey))
+      .sort((left, right) => right.reclaimWeight - left.reclaimWeight || right.masteryScore - left.masteryScore)
+      .slice(0, 4 - masteryHighlights.length)
+      .forEach((insight) => masteryHighlights.push(insight));
+  }
+
+  const rewardMetrics = {
+    totalXp,
+    level,
+    xpIntoLevel: totalXp - levelFloor,
+    xpForNext: nextLevelAt - levelFloor,
+    todayXp: todaySessions.length * 10 + todaySessions.filter((entry) => entry.result === "clear").length * 18 + todayQuestXp,
+    trainingStreak: getTrainingDayStreak(),
+    questCount: state.coach.completedQuests.length,
+    lockedInCount: insights.filter((insight) => insight.unlocked && insight.masteryScore >= 65).length,
+    masteredCount: insights.filter((insight) => insight.unlocked && insight.masteryScore >= 82).length,
+    readinessScore: bossReadiness.score,
+  };
+
+  const badges = COACH_BADGES.map((badge) => ({
+    ...badge,
+    earned: badge.isEarned(rewardMetrics),
+    progressLabel: badge.progress(rewardMetrics),
+  }));
+
+  const summary = currentInsight
+    ? `${pushQuest?.target?.name || currentInsight.step.name} is the main push. ${weaknessQuest?.target?.name || "A repair rep"} patches the loudest leak, and ${reclaimQuest?.target?.name || "an older clear"} keeps your route floor from rusting.`
+    : "The route is clear, so the daily loop is now about keeping mastery fresh and cycling boss-ready reps.";
+
+  return {
+    todayKey,
+    summary,
+    activeWorld,
+    insights,
+    insightByMetaKey,
+    currentInsight,
+    quests,
+    sessionPlan,
+    bossReadiness,
+    rewards: rewardMetrics,
+    badges,
+    masteryHighlights,
+  };
+}
+
+function syncCompletedQuestRewards(quests) {
+  const completedIds = new Set(state.coach.completedQuests.map((entry) => entry.id));
+  let changed = false;
+
+  quests.forEach((quest) => {
+    if (!quest.criteriaMet || completedIds.has(quest.id)) {
+      return;
+    }
+    changed = true;
+    state.coach.completedQuests.unshift({
+      id: quest.id,
+      at: new Date().toISOString(),
+      xp: quest.xp,
+      label: quest.shortLabel,
+    });
+    completedIds.add(quest.id);
+  });
+
+  if (changed) {
+    state.coach.completedQuests = state.coach.completedQuests.slice(0, QUEST_LOG_LIMIT);
+  }
+  return changed;
+}
+
+function refreshDerivedState(syncRewards = false) {
+  trainingEngine = buildTrainingEngine();
+  coachEngine = buildCoachEngine();
+  if (syncRewards && syncCompletedQuestRewards(coachEngine.quests)) {
+    coachEngine = buildCoachEngine();
+  }
+}
+
 function getFreshnessSummary() {
   const verifiedDate = new Date(VERIFIED_AT);
   const now = new Date();
@@ -2098,6 +3412,11 @@ function clearMainLevel(stepNumber) {
   const clearedWorld = routeData.preparedWorlds[clearedStep.worldIndex];
   state.mainCleared += 1;
   delete state.mainStepStatus[getMainLevelKey(stepNumber)];
+  appendTrainingLogEntry(createTrainingLogEntry(clearedStep.metaKey, {
+    result: "clear",
+    failPoint: "clear",
+    bestPercent: 100,
+  }));
   focusWorld(getCurrentWorld().id);
   recordActivity(`Marked ${clearedStep.name} as cleared.`);
   saveState();
@@ -2204,6 +3523,11 @@ function setBonusStepStatus(stepId, nextStatus) {
   if (nextStatus === "cleared") {
     state.bonusCleared[stepId] = true;
     delete state.bonusStepStatus[stepId];
+    appendTrainingLogEntry(createTrainingLogEntry(bonusStepData.metaKey, {
+      result: "clear",
+      failPoint: "clear",
+      bestPercent: 100,
+    }));
   } else {
     delete state.bonusCleared[stepId];
     if (nextStatus === "optional") {
@@ -2239,6 +3563,31 @@ function saveLevelNote(levelKey, text, label) {
   showToast(normalized ? `Saved note for ${label}.` : `Cleared note for ${label}.`);
 }
 
+function logTrainingSession(metaKey, shell, label) {
+  if (!shell) {
+    return;
+  }
+
+  const entry = createTrainingLogEntry(metaKey, {
+    attempts: shell.querySelector("[data-session-attempts]")?.value,
+    bestPercent: shell.querySelector("[data-session-best]")?.value,
+    result: shell.querySelector("[data-session-result]")?.value,
+    failPoint: shell.querySelector("[data-session-fail-point]")?.value,
+    issues: Array.from(shell.querySelectorAll("[data-session-issue]:checked")).map((input) => input.dataset.sessionIssue),
+  });
+  if (!entry) {
+    showToast("Could not log that session.");
+    return;
+  }
+
+  pushUndoSnapshot();
+  appendTrainingLogEntry(entry);
+  recordActivity(`Logged a training session for ${label}.`);
+  saveState();
+  render();
+  showToast(`Training session saved for ${label}.`);
+}
+
 function toggleWorld(worldId) {
   const world = routeData.preparedWorlds.find((entry) => entry.id === worldId);
   if (!world) {
@@ -2250,17 +3599,20 @@ function toggleWorld(worldId) {
 }
 
 function resetProgress() {
-  if (!window.confirm("Reset campaign progress for the current custom route?")) {
+  if (!window.confirm("Reset campaign progress, notes, trackers, and training history for the current custom route?")) {
     return;
   }
   pushUndoSnapshot();
+  const preservedSessionMode = state.coach.sessionMode;
   state.mainCleared = 0;
   state.bonusCleared = {};
   state.mainStepStatus = {};
   state.bonusStepStatus = {};
   state.levelNotes = {};
+  state.trainingLog = [];
+  state.coach = defaultCoachState({ sessionMode: preservedSessionMode });
   focusWorld(getDefaultSelectedWorldId(routeData.preparedWorlds, state.mainCleared));
-  recordActivity("Reset route progress, notes, and tracker states.");
+  recordActivity("Reset route progress, notes, tracker states, and training history.");
   saveState();
   render();
   showToast("Progress reset.");
@@ -2284,6 +3636,33 @@ function renderDisabledButton(label, className) {
 
 function renderJumpButton(label, targetId, worldId, className = "world__jump") {
   return `<button class="${className}" type="button" data-action="jump-node" data-target-id="${targetId}" data-world-id="${worldId}">${escapeHtml(label)}</button>`;
+}
+
+function renderLocalJumpButton(label, targetId, className = "button button--ghost") {
+  return `<button class="${className}" type="button" data-action="jump-node" data-target-id="${targetId}">${escapeHtml(label)}</button>`;
+}
+
+function renderMasteryMeter(insight, compact = false) {
+  if (!insight) {
+    return "";
+  }
+
+  return `
+    <div class="mastery-meter${compact ? " mastery-meter--compact" : ""}" aria-hidden="true">
+      <span class="mastery-meter__fill mastery-meter__fill--${insight.tier.className}" style="width: ${insight.masteryScore}%"></span>
+    </div>
+  `;
+}
+
+function renderMasteryTag(insight, compact = false) {
+  if (!insight) {
+    return "";
+  }
+
+  return renderBadge(
+    `${compact ? insight.tier.shortLabel : insight.tier.label} ${insight.masteryScore}`,
+    `badge badge--mastery badge--mastery-${insight.tier.className}`,
+  );
 }
 
 function getProfileOptionTitle(groupKey, optionId) {
@@ -2505,9 +3884,90 @@ function renderNoteEditor(levelKey, label) {
   `;
 }
 
+function renderTrainingLogger(step) {
+  const aggregate = trainingEngine.byMetaKey.get(step.metaKey) || createTrainingAggregate(step.metaKey);
+  const recommendation = trainingEngine.recommendationByMetaKey.get(step.metaKey) || null;
+  const recentSessions = getRecentTrainingSessions(step.metaKey, 3);
+  const insight = coachEngine.insightByMetaKey.get(step.metaKey) || null;
+
+  return `
+    <section class="session-panel" data-training-shell="${escapeHtml(step.metaKey)}">
+      <div class="tracker-panel__header">
+        <div>
+          <p class="panel-heading__kicker">Training Engine</p>
+          <h4 class="tracker-panel__title">${escapeHtml(recommendation?.label || "Feed The Engine")}</h4>
+        </div>
+        ${insight ? renderMasteryTag(insight, true) : `<span class="pill">${aggregate.sessions} logged</span>`}
+      </div>
+      <p class="tracker-panel__copy">${escapeHtml(recommendation?.reason || "Log how the run felt and the engine will use it to reprioritize your practice queue.")}</p>
+      ${renderMasteryMeter(insight, true)}
+      <div class="session-panel__meta">
+        ${aggregate.sessions ? renderMetaTag(`${aggregate.sessions} logged`) : ""}
+        ${aggregate.bestPercent != null ? renderMetaTag(`Best ${aggregate.bestPercent}%`) : ""}
+        ${aggregate.roughSessions ? renderMetaTag(`${aggregate.roughSessions} rough`) : ""}
+        ${aggregate.endingFails ? renderMetaTag(`${aggregate.endingFails} late miss${aggregate.endingFails === 1 ? "" : "es"}`) : ""}
+        ${insight?.freshness ? renderMetaTag(insight.freshness.label) : ""}
+      </div>
+      <div class="session-panel__grid">
+        <label class="session-field">
+          <span>Attempts</span>
+          <input class="session-field__input" type="number" min="0" max="9999" inputmode="numeric" placeholder="12" data-session-attempts>
+        </label>
+        <label class="session-field">
+          <span>Best %</span>
+          <input class="session-field__input" type="number" min="0" max="100" inputmode="numeric" placeholder="74" data-session-best>
+        </label>
+        <label class="session-field">
+          <span>Result</span>
+          <select class="session-field__input" data-session-result>
+            ${TRAINING_RESULT_OPTIONS.map((option) => `
+              <option value="${option.id}"${option.id === "progress" ? " selected" : ""}>${escapeHtml(option.label)}</option>
+            `).join("")}
+          </select>
+        </label>
+        <label class="session-field">
+          <span>Fail Point</span>
+          <select class="session-field__input" data-session-fail-point>
+            ${TRAINING_FAIL_POINT_OPTIONS.map((option) => `
+              <option value="${option.id}"${option.id === "mid" ? " selected" : ""}>${escapeHtml(option.label)}</option>
+            `).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="session-checks" role="group" aria-label="Training struggles">
+        ${TRAINING_SIGNAL_META.map((signal) => `
+          <label class="session-check">
+            <input type="checkbox" data-session-issue="${signal.id}">
+            <span>${escapeHtml(signal.shortLabel)}</span>
+          </label>
+        `).join("")}
+      </div>
+      <div class="tracker-note__actions">
+        <button class="button button--ghost" type="button" data-action="log-session" data-meta-key="${escapeHtml(step.metaKey)}" data-level-label="${escapeHtml(step.name)}">Log Session</button>
+      </div>
+      ${
+        recentSessions.length
+          ? `<div class="session-history">${recentSessions.map((session) => `
+            <article class="session-history__item">
+              <strong>${escapeHtml(TRAINING_RESULT_OPTIONS.find((option) => option.id === session.result)?.label || "Session")}</strong>
+              <span>${escapeHtml([
+                session.bestPercent != null ? `${session.bestPercent}%` : null,
+                TRAINING_FAIL_POINT_OPTIONS.find((option) => option.id === session.failPoint)?.label || null,
+                session.issues.length ? session.issues.map((issue) => getTrainingSignalMeta(issue).shortLabel).join(", ") : null,
+                formatActivityTime(session.at),
+              ].filter(Boolean).join(" / "))}</span>
+            </article>
+          `).join("")}</div>`
+          : '<p class="session-panel__empty">No sessions logged for this level yet.</p>'
+      }
+    </section>
+  `;
+}
+
 function renderMainTracker(step) {
   const levelKey = getMainLevelKey(step.number);
   const status = getMainStepDisplayStatus(step);
+  const insight = coachEngine.insightByMetaKey.get(step.metaKey) || null;
   let options = [];
   let copy = "Locked until the previous main level is cleared.";
 
@@ -2526,17 +3986,24 @@ function renderMainTracker(step) {
           <p class="panel-heading__kicker">Tracker</p>
           <h4 class="tracker-panel__title">${escapeHtml(getMainStepStatusLabel(step))}</h4>
         </div>
-        <span class="pill">${escapeHtml(getMainStepStatusLabel(step))}</span>
+        ${insight ? renderMasteryTag(insight, true) : `<span class="pill">${escapeHtml(getMainStepStatusLabel(step))}</span>`}
       </div>
       <p class="tracker-panel__copy">${escapeHtml(copy)}</p>
+      ${renderMasteryMeter(insight, true)}
+      <div class="tracker-status-row">
+        ${renderMetaTag(`Status ${getMainStepStatusLabel(step)}`)}
+        ${insight?.freshness ? renderMetaTag(insight.freshness.label) : ""}
+      </div>
       ${options.length ? renderStatusPicker(options, status, "set-main-status", "data-step-number", step.number) : ""}
       ${renderNoteEditor(levelKey, step.name)}
+      ${renderTrainingLogger(step)}
     </section>
   `;
 }
 
 function renderBonusTracker(step, pack) {
   const status = getBonusStepDisplayStatus(step, pack);
+  const insight = coachEngine.insightByMetaKey.get(step.metaKey) || null;
   const options = isBonusUnlocked(pack)
     ? BONUS_PROGRESS_OPTIONS
     : [];
@@ -2551,11 +4018,17 @@ function renderBonusTracker(step, pack) {
           <p class="panel-heading__kicker">Tracker</p>
           <h4 class="tracker-panel__title">${escapeHtml(getBonusStepStatusLabel(step, pack))}</h4>
         </div>
-        <span class="pill">${escapeHtml(getBonusStepStatusLabel(step, pack))}</span>
+        ${insight ? renderMasteryTag(insight, true) : `<span class="pill">${escapeHtml(getBonusStepStatusLabel(step, pack))}</span>`}
       </div>
       <p class="tracker-panel__copy">${escapeHtml(copy)}</p>
+      ${renderMasteryMeter(insight, true)}
+      <div class="tracker-status-row">
+        ${renderMetaTag(`Status ${getBonusStepStatusLabel(step, pack)}`)}
+        ${insight?.freshness ? renderMetaTag(insight.freshness.label) : ""}
+      </div>
       ${options.length ? renderStatusPicker(options, status, "set-bonus-status", "data-bonus-id", step.id) : ""}
       ${renderNoteEditor(step.id, step.name)}
+      ${renderTrainingLogger(step)}
     </section>
   `;
 }
@@ -2594,7 +4067,7 @@ function buildSearchResults(query) {
         score,
         kind: "main",
         title: `${step.number}. ${step.name}`,
-        subtitle: `${step.creator} • ${step.difficulty} • ${step.worldLabel}`,
+        subtitle: `${step.creator} / ${step.difficulty} / ${step.worldLabel}`,
         worldId: step.worldId,
         targetId: step.anchorId,
       });
@@ -2610,7 +4083,7 @@ function buildSearchResults(query) {
         score,
         kind: "bonus",
         title: `${step.name} (Bonus)`,
-        subtitle: `${step.creator} • ${step.difficulty} • ${step.worldTitle}`,
+        subtitle: `${step.creator} / ${step.difficulty} / ${step.worldTitle}`,
         worldId: step.worldId,
         targetId: step.id,
       });
@@ -2628,6 +4101,7 @@ function renderRouteToolbar() {
   const previousWorld = routeData.preparedWorlds[selectedWorld.worldIndex - 1] || null;
   const nextWorld = routeData.preparedWorlds[selectedWorld.worldIndex + 1] || null;
   const searchResults = buildSearchResults(routeSearchQuery);
+  const activeSignal = trainingEngine.primarySignal;
 
   elements.routeToolbar.innerHTML = `
     <div class="route-toolbar__top">
@@ -2635,12 +4109,13 @@ function renderRouteToolbar() {
         <p class="panel-heading__kicker">Route Workspace</p>
         <h2 class="route-toolbar__title">${escapeHtml(selectedWorld.worldLabel)}: ${escapeHtml(selectedWorld.title)}</h2>
         <p class="route-toolbar__copy">
-          One world at a time, with quick jump, tracker controls, notes, and research context in the same place.
+          One world at a time, with quick jump, tracker controls, notes, research context, and a live training read in the same place.${activeSignal ? ` Current leak: ${activeSignal.label.toLowerCase()}.` : " Log a few sessions to unlock adaptive drill calls."}
         </p>
       </div>
       <div class="route-toolbar__meta">
         ${renderMetaTag(`${getWorldMainClears(selectedWorld)} / ${selectedWorld.levels.length} main`)}
         ${renderMetaTag(`${getWorldBonusClears(selectedWorld)} / ${selectedWorld.bonusCount} bonus`)}
+        ${activeSignal ? renderMetaTag(`Adaptive ${activeSignal.shortLabel}`) : ""}
         ${renderMetaTag(`Data ${freshness.label}`)}
       </div>
     </div>
@@ -2733,6 +4208,405 @@ function renderHistoryPanel() {
   `;
 }
 
+function renderTrainingRecommendation(entry, compact = false) {
+  const targetId = typeof entry.step.number === "number" ? entry.step.anchorId : entry.step.id;
+  return `
+    <button
+      class="training-queue__item${compact ? " training-queue__item--compact" : ""}"
+      type="button"
+      data-action="jump-node"
+      data-world-id="${escapeHtml(entry.step.worldId)}"
+      data-target-id="${escapeHtml(targetId)}"
+      aria-label="Jump to ${escapeHtml(entry.step.name)}"
+    >
+      <span class="training-queue__rank">#${entry.rank}</span>
+      <span class="training-queue__copy">
+        <strong>${escapeHtml(entry.step.name)}</strong>
+        <span>${escapeHtml(entry.label)} / ${escapeHtml(entry.reason)}</span>
+      </span>
+    </button>
+  `;
+}
+
+function renderQuestCard(quest) {
+  const insight = quest.targetInsight || coachEngine.insightByMetaKey.get(quest.target.metaKey);
+  const targetId = typeof quest.target.number === "number" ? quest.target.anchorId : quest.target.id;
+  const worldLabel = typeof quest.target.number === "number" ? `${quest.target.worldLabel} / Level ${quest.target.number}` : `${quest.target.worldTitle} / Bonus`;
+  return `
+    <article class="quest-card quest-card--${escapeHtml(quest.type)}${quest.complete ? " quest-card--complete" : ""}">
+      <div class="quest-card__top">
+        <div>
+          <p class="panel-heading__kicker">${escapeHtml(quest.label)}</p>
+          <h3 class="quest-card__title">${escapeHtml(quest.target.name)}</h3>
+        </div>
+        <div class="quest-card__meta">
+          ${renderMasteryTag(insight, true)}
+          <span class="status-marker ${quest.complete ? "status-marker--complete" : "status-marker--current"}">${escapeHtml(quest.stateLabel)}</span>
+        </div>
+      </div>
+      <p class="quest-card__copy">${escapeHtml(quest.reason)}</p>
+      ${renderMasteryMeter(insight, true)}
+      <div class="objective-card__tag-row">
+        ${renderMetaTag(worldLabel)}
+        ${renderMetaTag(insight?.freshness?.label || "Freshness pending")}
+        ${renderMetaTag(quest.progressText)}
+        ${renderBadge(quest.rewardLabel, "badge badge--training")}
+      </div>
+      <div class="quest-card__actions">
+        ${renderJumpButton("View Target", targetId, quest.target.worldId, "button button--ghost")}
+        ${renderLinkButton(quest.target.levelUrl, "Open Level", "button")}
+      </div>
+    </article>
+  `;
+}
+
+function renderCoachPanel() {
+  if (!elements.coachPanel) {
+    return;
+  }
+
+  const staleCount = coachEngine.insights.filter((insight) => insight.cleared && insight.freshness.stale).length;
+  elements.coachPanel.innerHTML = `
+    <div class="panel-heading panel-heading--compact">
+      <div>
+        <p class="panel-heading__kicker">Daily Loop</p>
+        <h2 id="page-overview-title">Command Uplink</h2>
+      </div>
+      <span class="status-marker status-marker--current">${coachEngine.quests.filter((quest) => quest.complete).length} / ${coachEngine.quests.length} done</span>
+    </div>
+    <p class="summary-panel__copy">${escapeHtml(coachEngine.summary)}</p>
+    <div class="training-panel__stats">
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Live Leak</span>
+        <strong>${escapeHtml(trainingEngine.primarySignal?.shortLabel || "Baseline")}</strong>
+      </article>
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Reclaims Due</span>
+        <strong>${staleCount}</strong>
+      </article>
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Boss Score</span>
+        <strong>${coachEngine.bossReadiness.score}</strong>
+      </article>
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Session Mode</span>
+        <strong>${escapeHtml(coachEngine.sessionPlan.mode.label)}</strong>
+      </article>
+    </div>
+    <div class="summary-panel__actions">
+      ${renderLocalJumpButton("Open Plan", "planner-panel")}
+      <button class="button button--ghost" type="button" data-action="jump-current">View Current Gate</button>
+      <button class="button button--ghost" type="button" data-action="open-setup">Rebuild Route</button>
+    </div>
+  `;
+}
+
+function renderRewardPanel() {
+  if (!elements.rewardPanel) {
+    return;
+  }
+
+  const nextBadge = coachEngine.badges.find((badge) => !badge.earned) || null;
+  elements.rewardPanel.innerHTML = `
+    <div class="panel-heading panel-heading--compact">
+      <div>
+        <p class="panel-heading__kicker">Reward Loop</p>
+        <h2>Momentum Bank</h2>
+      </div>
+      <span class="status-marker status-marker--complete">Lv ${coachEngine.rewards.level}</span>
+    </div>
+    <div class="reward-panel__hero">
+      <div>
+        <span class="summary-panel__label">Total XP</span>
+        <strong class="reward-panel__value">${coachEngine.rewards.totalXp}</strong>
+      </div>
+      <div class="objective-card__tag-row">
+        ${renderMetaTag(`Today +${coachEngine.rewards.todayXp} XP`)}
+        ${renderMetaTag(`${coachEngine.rewards.trainingStreak} day streak`)}
+        ${renderMetaTag(`${coachEngine.rewards.questCount} quests banked`)}
+      </div>
+    </div>
+    <div class="mastery-meter reward-panel__meter" aria-hidden="true">
+      <span class="mastery-meter__fill mastery-meter__fill--locked" style="width: ${(coachEngine.rewards.xpIntoLevel / coachEngine.rewards.xpForNext) * 100}%"></span>
+    </div>
+    <p class="summary-panel__copy">${coachEngine.rewards.xpForNext - coachEngine.rewards.xpIntoLevel} XP to level ${coachEngine.rewards.level + 1}.</p>
+    <div class="reward-badges">
+      ${coachEngine.badges.map((badge) => `
+        <article class="reward-badge${badge.earned ? " is-earned" : ""}">
+          <strong>${escapeHtml(badge.label)}</strong>
+          <span>${escapeHtml(badge.earned ? "Earned" : badge.progressLabel)}</span>
+        </article>
+      `).join("")}
+    </div>
+    ${
+      nextBadge
+        ? `<p class="summary-panel__copy">Next badge: <strong>${escapeHtml(nextBadge.label)}</strong> (${escapeHtml(nextBadge.progressLabel)}).</p>`
+        : '<p class="summary-panel__copy">All current badge targets are earned in this save.</p>'
+    }
+  `;
+}
+
+function renderQuestsPanel() {
+  if (!elements.questsPanel) {
+    return;
+  }
+
+  elements.questsPanel.innerHTML = `
+    <div class="panel-heading">
+      <div>
+        <p class="panel-heading__kicker">Live Quests</p>
+        <h2>Daily Run Card</h2>
+      </div>
+      <div class="route-toolbar__meta">
+        ${renderMetaTag(`${coachEngine.quests.filter((quest) => quest.complete).length} / ${coachEngine.quests.length} complete`)}
+        ${renderMetaTag(`Today +${coachEngine.rewards.todayXp} XP`)}
+      </div>
+    </div>
+    <p class="summary-panel__copy">Quests refresh from your current route, weak spots, older clears, and the next boss gate. A productive day still counts even if there is no new hardest.</p>
+    <div class="quests-grid">
+      ${coachEngine.quests.map((quest) => renderQuestCard(quest)).join("")}
+    </div>
+  `;
+}
+
+function renderPlannerPanel() {
+  if (!elements.plannerPanel) {
+    return;
+  }
+
+  elements.plannerPanel.innerHTML = `
+    <div class="panel-heading">
+      <div>
+        <p class="panel-heading__kicker">Session Planner</p>
+        <h2>Recommended Block</h2>
+      </div>
+      <div class="session-mode-switch" role="tablist" aria-label="Session modes">
+        ${SESSION_MODES.map((mode) => `
+          <button
+            class="tracker-chip${coachEngine.sessionPlan.mode.id === mode.id ? " is-active" : ""}"
+            type="button"
+            data-action="set-session-mode"
+            data-mode="${mode.id}"
+            aria-pressed="${coachEngine.sessionPlan.mode.id === mode.id}"
+          >
+            ${escapeHtml(mode.label)}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+    <p class="summary-panel__copy">${escapeHtml(coachEngine.sessionPlan.mode.description)} This plan uses your live quests rather than a fixed checklist.</p>
+    <div class="session-plan">
+      ${coachEngine.sessionPlan.blocks.map((block) => {
+        const target = block.insight?.step || null;
+        const targetId = target ? (typeof target.number === "number" ? target.anchorId : target.id) : "";
+        return `
+          <article class="session-block">
+            <div class="session-block__top">
+              <div>
+                <p class="panel-heading__kicker">${escapeHtml(block.label)}</p>
+                <h3>${escapeHtml(target?.name || "Flexible Slot")}</h3>
+              </div>
+              <span class="pill">${block.minutes} min</span>
+            </div>
+            ${target ? renderMasteryMeter(block.insight, true) : ""}
+            <p class="summary-panel__copy">${escapeHtml(block.copy)}</p>
+            <div class="objective-card__tag-row">
+              ${target ? renderMasteryTag(block.insight, true) : ""}
+              ${target ? renderMetaTag(block.insight.freshness.label) : ""}
+              ${target ? renderMetaTag(typeof target.number === "number" ? target.worldLabel : "Bonus lane") : ""}
+            </div>
+            ${
+              target
+                ? `<div class="quest-card__actions">${renderJumpButton("Open Slot", targetId, target.worldId, "button button--ghost")}${renderLinkButton(target.levelUrl, "Open Level", "button")}</div>`
+                : ""
+            }
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderMasteryPanel() {
+  if (!elements.masteryPanel) {
+    return;
+  }
+
+  elements.masteryPanel.innerHTML = `
+    <div class="panel-heading panel-heading--compact">
+      <div>
+        <p class="panel-heading__kicker">Mastery Board</p>
+        <h2>Live Level Read</h2>
+      </div>
+      <div class="route-toolbar__meta">
+        ${renderMetaTag(`${coachEngine.rewards.lockedInCount} locked in`)}
+        ${renderMetaTag(`${coachEngine.rewards.masteredCount} mastered`)}
+      </div>
+    </div>
+    <p class="summary-panel__copy">Mastery mixes route state, best percent, session quality, clears, revisit debt, and freshness. Cleared levels cool off over time, so reclaim calls stay honest.</p>
+    <div class="mastery-grid">
+      ${coachEngine.masteryHighlights.map((insight) => `
+        <article class="mastery-card mastery-card--${insight.tier.className}">
+          <div class="mastery-card__top">
+            <div>
+              <p class="panel-heading__kicker">${escapeHtml(typeof insight.step.number === "number" ? `${insight.step.worldLabel} / Level ${insight.step.number}` : `${insight.step.worldTitle} / Bonus`)}</p>
+              <h3>${escapeHtml(insight.step.name)}</h3>
+            </div>
+            ${renderMasteryTag(insight)}
+          </div>
+          ${renderMasteryMeter(insight)}
+          <div class="objective-card__tag-row">
+            ${renderMetaTag(insight.statusLabel)}
+            ${renderMetaTag(insight.freshness.label)}
+            ${insight.bestPercent != null ? renderMetaTag(`Best ${insight.bestPercent}%`) : ""}
+          </div>
+          <p class="summary-panel__copy">${escapeHtml(insight.summary)}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderBossPanel() {
+  if (!elements.bossPanel) {
+    return;
+  }
+
+  const { bossReadiness } = coachEngine;
+  const prepStep = bossReadiness.prepInsight?.step || bossReadiness.boss;
+  const prepTargetId = prepStep ? (typeof prepStep.number === "number" ? prepStep.anchorId : prepStep.id) : "";
+  elements.bossPanel.innerHTML = `
+    <div class="panel-heading">
+      <div>
+        <p class="panel-heading__kicker">Boss Readiness</p>
+        <h2>${escapeHtml(bossReadiness.world.worldLabel)} Gate</h2>
+      </div>
+      <span class="status-marker ${bossReadiness.score >= 75 ? "status-marker--complete" : "status-marker--current"}">${escapeHtml(bossReadiness.label)}</span>
+    </div>
+    <div class="boss-panel__hero">
+      <div>
+        <span class="summary-panel__label">Next Boss</span>
+        <strong class="reward-panel__value">${bossReadiness.score}</strong>
+      </div>
+      <div>
+        <h3>${escapeHtml(bossReadiness.boss.name)}</h3>
+        <p class="summary-panel__copy">Prep anchor: ${escapeHtml(prepStep?.name || bossReadiness.boss.name)}</p>
+      </div>
+    </div>
+    <div class="mastery-meter boss-panel__meter" aria-hidden="true">
+      <span class="mastery-meter__fill mastery-meter__fill--${bossReadiness.score >= 75 ? "mastered" : bossReadiness.score >= 60 ? "locked" : bossReadiness.score >= 40 ? "stable" : "building"}" style="width: ${bossReadiness.score}%"></span>
+    </div>
+    <div class="boss-panel__grid">
+      <article class="training-signal">
+        <div class="training-signal__top">
+          <strong>Helping</strong>
+          <span class="pill">${bossReadiness.helping.length}</span>
+        </div>
+        <ul class="boss-panel__list">
+          ${bossReadiness.helping.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      </article>
+      <article class="training-signal">
+        <div class="training-signal__top">
+          <strong>Holding It Back</strong>
+          <span class="pill">${bossReadiness.blockers.length}</span>
+        </div>
+        <ul class="boss-panel__list">
+          ${bossReadiness.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      </article>
+    </div>
+    <div class="summary-panel__actions">
+      ${renderJumpButton("Open Prep", prepTargetId, prepStep.worldId, "button button--ghost")}
+      ${renderJumpButton("Open Boss", bossReadiness.boss.anchorId, bossReadiness.boss.worldId, "button button--ghost")}
+    </div>
+  `;
+}
+
+function renderTrainingPanel() {
+  if (!elements.trainingPanel) {
+    return;
+  }
+
+  const suggestedFocusLabel = PROFILE_QUESTIONS.focus.options.find((option) => option.id === trainingEngine.suggestedFocus)?.title || "Balanced";
+  elements.trainingPanel.innerHTML = `
+    <div class="panel-heading panel-heading--compact">
+      <div>
+        <p class="panel-heading__kicker">Weakness Radar</p>
+        <h2>Adaptive Drill Feed</h2>
+      </div>
+      <span class="status-marker ${trainingEngine.engaged ? "status-marker--current" : "status-marker--locked"}">${trainingEngine.engaged ? "Adaptive" : "Waiting"}</span>
+    </div>
+    <p class="summary-panel__copy">${escapeHtml(trainingEngine.summary)}</p>
+    <div class="training-panel__stats">
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Sessions Logged</span>
+        <strong>${trainingEngine.totalSessions}</strong>
+      </article>
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Tracked Levels</span>
+        <strong>${trainingEngine.trackedLevels}</strong>
+      </article>
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Late Misses</span>
+        <strong>${trainingEngine.endingFailures}</strong>
+      </article>
+      <article class="summary-panel__item">
+        <span class="summary-panel__label">Suggested Bias</span>
+        <strong>${escapeHtml(suggestedFocusLabel)}</strong>
+      </article>
+    </div>
+    ${
+      trainingEngine.activeSignals.length
+        ? `<div class="training-panel__signals">${trainingEngine.activeSignals.map((signal) => `
+          <article class="training-signal">
+            <div class="training-signal__top">
+              <strong>${escapeHtml(signal.label)}</strong>
+              <span class="pill">${escapeHtml(signal.intensity)}</span>
+            </div>
+            <p>${escapeHtml(signal.description)}</p>
+            <div class="objective-card__tag-row">
+              ${renderMetaTag(`Score ${signal.score.toFixed(1)}`)}
+              ${renderMetaTag(`Bias ${PROFILE_QUESTIONS.focus.options.find((option) => option.id === signal.focus)?.title || "Balanced"}`)}
+            </div>
+          </article>
+        `).join("")}</div>`
+        : '<p class="training-panel__empty">No structured reps yet. Use the tracker session logger on any level and the engine will start scoring wave leaks, chokepoints, stamina, nerves, and failed endings.</p>'
+    }
+    <div class="training-panel__queue">
+      <div class="panel-heading panel-heading--compact">
+        <div>
+          <p class="panel-heading__kicker">Practice Queue</p>
+          <h2>Best Next Block</h2>
+        </div>
+      </div>
+      ${
+        trainingEngine.recommendations.length
+          ? trainingEngine.recommendations.slice(0, 3).map((entry) => renderTrainingRecommendation(entry)).join("")
+          : '<p class="training-panel__empty">The live queue will appear once you start logging sessions.</p>'
+      }
+    </div>
+    ${
+      trainingEngine.recentSessions.length
+        ? `<div class="training-panel__history">
+          <p class="panel-heading__kicker">Recent Sessions</p>
+          <div class="session-history">${trainingEngine.recentSessions.map((session) => `
+            <article class="session-history__item">
+              <strong>${escapeHtml(session.level?.name || session.metaKey)}</strong>
+              <span>${escapeHtml([
+                TRAINING_RESULT_OPTIONS.find((option) => option.id === session.result)?.label || "Session",
+                session.bestPercent != null ? `${session.bestPercent}%` : null,
+                TRAINING_FAIL_POINT_OPTIONS.find((option) => option.id === session.failPoint)?.label || null,
+                formatActivityTime(session.at),
+              ].filter(Boolean).join(" / "))}</span>
+            </article>
+          `).join("")}</div>
+        </div>`
+        : ""
+    }
+  `;
+}
+
 function renderObjectiveCard() {
   const currentStep = getCurrentStep();
   const profile = currentProfile();
@@ -2745,6 +4619,12 @@ function renderObjectiveCard() {
     ? routeData.preparedWorlds[currentStep.worldIndex]
     : routeData.preparedWorlds[routeData.preparedWorlds.length - 1];
   const activeBiome = getBiomeTheme(activeWorld);
+  const primarySignal = trainingEngine.primarySignal;
+  const questCount = coachEngine.quests.filter((quest) => quest.complete).length;
+  const currentInsight = coachEngine.currentInsight;
+  const pushQuest = coachEngine.quests.find((quest) => quest.type === "push") || null;
+  const currentTarget = pushQuest?.target || currentStep;
+  const currentTargetInsight = pushQuest?.targetInsight || currentInsight;
 
   elements.objectiveCard.setAttribute("style", renderBiomeVars(activeBiome));
   elements.objectiveCard.dataset.biome = activeBiome.id;
@@ -2754,13 +4634,13 @@ function renderObjectiveCard() {
     elements.objectiveCard.innerHTML = `
       <div class="objective-card__header">
         <div>
-          <p class="objective-card__eyebrow">Campaign Complete</p>
-          <h2 class="objective-card__title">Route cleared through the current #1.</h2>
+          <p class="objective-card__eyebrow">Campaign Clear</p>
+          <h2 class="objective-card__title">The ladder is clear. Keep the route sharp.</h2>
           <p class="objective-card__copy">
-            ${escapeHtml(routeData.routeSummary)}. Bonus progress: ${getBonusClearsCount()} / ${routeData.totalBonus}. Use Journey Builder to spin up a different route whenever you want another grind.
+            ${escapeHtml(coachEngine.summary)}
           </p>
         </div>
-        <span class="status-marker status-marker--complete">${escapeHtml(activeBiome.label)} Clear</span>
+        <span class="status-marker status-marker--complete">${questCount} / ${coachEngine.quests.length} quests banked</span>
       </div>
       <div class="objective-card__layout">
         <div class="objective-card__spotlight">
@@ -2768,30 +4648,37 @@ function renderObjectiveCard() {
           <div>
             <p class="objective-card__target-label">${escapeHtml(activeWorld.title)} / Final Boss Defeated</p>
             <h3 class="objective-card__target">${escapeHtml(finalBoss.name)}</h3>
-            <p class="objective-card__byline">Published by ${escapeHtml(finalBoss.creator)}</p>
+            <p class="objective-card__byline">Mastery route stays alive through reclaim reps, fresh clears, and boss-ready maintenance.</p>
+            ${renderMasteryMeter(coachEngine.insightByMetaKey.get(finalBoss.metaKey))}
+            <div class="objective-card__tag-row">
+              ${renderMasteryTag(coachEngine.insightByMetaKey.get(finalBoss.metaKey))}
+              ${renderMetaTag(`Today +${coachEngine.rewards.todayXp} XP`)}
+              ${renderMetaTag(`${coachEngine.rewards.trainingStreak} day streak`)}
+            </div>
             <div class="objective-card__actions">
               ${renderLinkButton(finalBoss.levelUrl, "Open Final Boss", "objective-card__button")}
+              ${renderLocalJumpButton("Open Quests", "quests-panel", "objective-card__button")}
               <button class="objective-card__button" type="button" data-action="open-setup">Rebuild Route</button>
             </div>
           </div>
         </div>
         <div class="objective-card__intel">
           <article class="intel-card">
-            <span class="intel-card__label">Cleared Biome</span>
-            <strong class="intel-card__value">${escapeHtml(activeBiome.label)}</strong>
-            <p class="intel-card__copy">${escapeHtml(activeBiome.subtitle)}</p>
+            <span class="intel-card__label">Quest Chain</span>
+            <strong class="intel-card__value">${questCount} / ${coachEngine.quests.length}</strong>
+            <p class="intel-card__copy">Today's loop is still live even after the route clear.</p>
           </article>
           <article class="intel-card">
-            <span class="intel-card__label">Campaign Stats</span>
-            <strong class="intel-card__value">${routeData.totalMain} main / ${routeData.totalBonus} bonus</strong>
-            <p class="intel-card__copy">${getCompletedWorldsCount()} of ${routeData.preparedWorlds.length} worlds cleared.</p>
+            <span class="intel-card__label">Boss Readiness</span>
+            <strong class="intel-card__value">${coachEngine.bossReadiness.score}</strong>
+            <p class="intel-card__copy">${escapeHtml(coachEngine.bossReadiness.label)} for ${escapeHtml(coachEngine.bossReadiness.boss.name)}.</p>
           </article>
           <article class="intel-card">
-            <span class="intel-card__label">Run Summary</span>
+            <span class="intel-card__label">Momentum</span>
             <div class="objective-card__tag-row">
-              ${renderMetaTag(routeData.routeSummary)}
-              ${renderMetaTag(`Theme ${themeLabel}`)}
-              ${renderMetaTag(`Bonus ${getBonusClearsCount()} / ${routeData.totalBonus}`)}
+              ${renderMetaTag(`Level ${coachEngine.rewards.level}`)}
+              ${renderMetaTag(`${coachEngine.rewards.totalXp} XP`)}
+              ${renderMetaTag(`${coachEngine.rewards.masteredCount} mastered`)}
             </div>
           </article>
         </div>
@@ -2810,31 +4697,42 @@ function renderObjectiveCard() {
   const biome = getBiomeTheme(world);
   const worldClears = getWorldMainClears(world);
   const worldProgressPercent = world.levels.length === 0 ? 0 : (worldClears / world.levels.length) * 100;
-  const remainingMain = routeData.totalMain - state.mainCleared;
   elements.objectiveCard.innerHTML = `
     <div class="objective-card__header">
       <div>
-        <p class="objective-card__eyebrow">Current Target</p>
-        <h2 class="objective-card__title">${escapeHtml(currentStep.name)}</h2>
-        <p class="objective-card__copy">${escapeHtml(currentStep.reason)}</p>
+        <p class="objective-card__eyebrow">Mastery Loop</p>
+        <h2 class="objective-card__title">Today's Run Card</h2>
+        <p class="objective-card__copy">${escapeHtml(coachEngine.summary)}</p>
       </div>
-      <span class="status-marker status-marker--current">${escapeHtml(world.worldLabel)} / ${escapeHtml(currentStep.difficulty)}</span>
+      <span class="status-marker status-marker--current">${questCount} / ${coachEngine.quests.length} quests banked</span>
     </div>
     <div class="objective-card__layout">
       <div class="objective-card__spotlight">
-        <div class="objective-card__serial">${currentStep.number}</div>
+        <div class="objective-card__serial">${currentTarget.number || "B"}</div>
         <div>
-          <p class="objective-card__target-label">${escapeHtml(biome.label)} / Stage ${currentStep.localNumber}</p>
-          <h3 class="objective-card__target">${escapeHtml(currentStep.name)}</h3>
-          <p class="objective-card__byline">Published by ${escapeHtml(currentStep.creator)}</p>
+          <p class="objective-card__target-label">${escapeHtml(biome.label)} / ${escapeHtml(pushQuest?.label || "Today's Push")}</p>
+          <h3 class="objective-card__target">${escapeHtml(currentTarget.name)}</h3>
+          <p class="objective-card__byline">${escapeHtml(pushQuest?.reason || currentStep.reason)}</p>
+          ${renderMasteryMeter(currentTargetInsight)}
+          <div class="objective-card__tag-row">
+            ${renderMasteryTag(currentTargetInsight)}
+            ${renderMetaTag(currentTargetInsight?.freshness?.label || "Freshness pending")}
+            ${currentTargetInsight?.bestPercent != null ? renderMetaTag(`Best ${currentTargetInsight.bestPercent}%`) : ""}
+            ${primarySignal ? renderMetaTag(`Leak ${primarySignal.shortLabel}`) : ""}
+          </div>
           <div class="objective-card__actions">
-            ${renderLinkButton(currentStep.levelUrl, "Open Level", "objective-card__button")}
+            ${renderLinkButton(currentTarget.levelUrl, "Open Push", "objective-card__button")}
             <button class="objective-card__button" type="button" data-action="jump-current">View On Path</button>
-            <button class="objective-card__button" type="button" data-action="clear-main" data-index="${currentStep.number}">Mark Cleared</button>
+            ${currentStep ? `<button class="objective-card__button" type="button" data-action="clear-main" data-index="${currentStep.number}">Mark Cleared</button>` : ""}
           </div>
         </div>
       </div>
       <div class="objective-card__intel">
+        <article class="intel-card">
+          <span class="intel-card__label">Quest Chain</span>
+          <strong class="intel-card__value">${questCount} / ${coachEngine.quests.length}</strong>
+          <p class="intel-card__copy">${escapeHtml(world.worldLabel)} daily loop is live right now.</p>
+        </article>
         <article class="intel-card">
           <span class="intel-card__label">World Progress</span>
           <strong class="intel-card__value">${worldClears} / ${world.levels.length}</strong>
@@ -2844,21 +4742,18 @@ function renderObjectiveCard() {
           <p class="intel-card__copy">${escapeHtml(world.gate)} / ${escapeHtml(biome.label)}</p>
         </article>
         <article class="intel-card">
-          <span class="intel-card__label">Route Build</span>
-          <strong class="intel-card__value">${escapeHtml(goalLabel)}</strong>
-          <p class="intel-card__copy">${escapeHtml(hardestLabel)} start / ${escapeHtml(focusLabel)} focus / ${escapeHtml(lengthLabel)} route</p>
+          <span class="intel-card__label">Boss Window</span>
+          <strong class="intel-card__value">${coachEngine.bossReadiness.score}</strong>
+          <p class="intel-card__copy">${escapeHtml(coachEngine.bossReadiness.boss.name)} / ${escapeHtml(coachEngine.bossReadiness.label)}</p>
         </article>
         <article class="intel-card">
-          <span class="intel-card__label">Level Intel</span>
+          <span class="intel-card__label">Reward Pulse</span>
           <div class="objective-card__tag-row">
-            ${renderMetaTag(currentStep.difficulty)}
-            ${renderMetaTag(currentStep.length)}
-            ${renderMetaTag(`${currentStep.stars} stars`)}
-            ${renderMetaTag(`ID ${currentStep.levelId}`)}
-            ${renderMetaTag(`Tracker ${getMainStepStatusLabel(currentStep)}`)}
-            ${currentStep.placement ? renderMetaTag(currentStep.placement) : ""}
-            ${currentStep.milestone ? renderBadge(currentStep.milestone, "badge badge--milestone") : ""}
+            ${renderMetaTag(`Lv ${coachEngine.rewards.level}`)}
+            ${renderMetaTag(`Today +${coachEngine.rewards.todayXp} XP`)}
+            ${renderMetaTag(`${coachEngine.rewards.trainingStreak} day streak`)}
           </div>
+          <p class="intel-card__copy">${escapeHtml(goalLabel)} route / ${escapeHtml(hardestLabel)} start / ${escapeHtml(lengthLabel)} plan</p>
         </article>
       </div>
     </div>
@@ -2866,9 +4761,9 @@ function renderObjectiveCard() {
       ${renderMetaTag(routeData.routeSummary)}
       ${renderMetaTag(biome.label)}
       ${renderMetaTag(`Theme ${themeLabel}`)}
-      ${renderMetaTag(`${remainingMain} main clears left`)}
       ${renderMetaTag(`${goalLabel} goal`)}
       ${renderMetaTag(`Current status ${getMainStepStatusLabel(currentStep)}`)}
+      ${primarySignal ? renderMetaTag(`Adaptive ${primarySignal.shortLabel}`) : ""}
       ${profile.focus !== "balanced" ? renderMetaTag(`${focusLabel} focus`) : ""}
       ${currentStep.skills.map((skill) => renderMetaTag(skill)).join("")}
     </div>
@@ -2921,6 +4816,9 @@ function renderNode(step, world) {
   const status = getMainStepDisplayStatus(step);
   const statusLabel = getMainStepStatusLabel(step);
   const visualStatus = status === "ready" ? "current" : status === "cleared" ? "complete" : status;
+  const recommendation = trainingEngine.recommendationByMetaKey.get(step.metaKey) || null;
+  const aggregate = trainingEngine.byMetaKey.get(step.metaKey) || null;
+  const insight = coachEngine.insightByMetaKey.get(step.metaKey) || null;
 
   let actions = renderLinkButton(step.levelUrl, "Open Level", "stage-card__button");
   if (status === "locked") {
@@ -2932,7 +4830,7 @@ function renderNode(step, world) {
   }
 
   return `
-    <article class="stage-card stage-card--${visualStatus}${step.isBoss ? " stage-card--boss" : ""}" id="${step.anchorId}">
+    <article class="stage-card stage-card--${visualStatus}${step.isBoss ? " stage-card--boss" : ""}${recommendation ? " stage-card--priority" : ""}" id="${step.anchorId}">
       <div class="stage-card__header">
         <div class="stage-card__serial-wrap">
           <div class="stage-card__serial">${step.localNumber}</div>
@@ -2949,11 +4847,17 @@ function renderNode(step, world) {
         ${renderMetaTag(`${step.stars} stars`)}
         ${renderMetaTag(step.length)}
         ${renderMetaTag(`ID ${step.levelId}`)}
+        ${aggregate?.sessions ? renderMetaTag(`${aggregate.sessions} session${aggregate.sessions === 1 ? "" : "s"}`) : ""}
+        ${insight ? renderMasteryTag(insight, true) : ""}
+        ${insight?.freshness ? renderMetaTag(insight.freshness.label) : ""}
         ${step.placement ? renderMetaTag(step.placement) : ""}
+        ${recommendation ? renderBadge(recommendation.label, "badge badge--training") : ""}
         ${step.isBoss ? renderBadge("World Boss", "badge badge--milestone") : ""}
         ${step.milestone ? renderBadge(step.milestone, "badge badge--milestone") : ""}
       </div>
+      ${renderMasteryMeter(insight, true)}
       <p class="stage-card__reason">${escapeHtml(step.reason)}</p>
+      ${recommendation ? `<p class="stage-card__training">${escapeHtml(recommendation.reason)}</p>` : ""}
       <div class="stage-card__footer">
         <div class="stage-card__skills">${step.skills.map((skill) => renderMetaTag(skill)).join("")}</div>
         <div class="stage-card__actions">${actions}</div>
@@ -2987,8 +4891,11 @@ function renderBonusPack(pack, profile) {
         ${pack.steps.map((step) => {
           const stepStatus = getBonusStepDisplayStatus(step, pack);
           const stepStatusLabel = getBonusStepStatusLabel(step, pack);
+          const recommendation = trainingEngine.recommendationByMetaKey.get(step.metaKey) || null;
+          const aggregate = trainingEngine.byMetaKey.get(step.metaKey) || null;
+          const insight = coachEngine.insightByMetaKey.get(step.metaKey) || null;
           return `
-            <article class="bonus-card" id="${step.id}">
+            <article class="bonus-card${recommendation ? " bonus-card--priority" : ""}" id="${step.id}">
               <div class="bonus-card__top">
                 <div>
                   <p class="bonus-card__eyebrow">Bonus ${step.localNumber}</p>
@@ -2999,10 +4906,16 @@ function renderBonusPack(pack, profile) {
                   ${renderMetaTag(step.difficulty)}
                   ${renderMetaTag(step.length)}
                   ${renderMetaTag(`ID ${step.levelId}`)}
+                  ${aggregate?.sessions ? renderMetaTag(`${aggregate.sessions} session${aggregate.sessions === 1 ? "" : "s"}`) : ""}
+                  ${insight ? renderMasteryTag(insight, true) : ""}
+                  ${insight?.freshness ? renderMetaTag(insight.freshness.label) : ""}
+                  ${recommendation ? renderBadge(recommendation.label, "badge badge--training") : ""}
                   ${stepStatus === "cleared" ? renderBadge("Complete", "badge badge--milestone") : renderMetaTag(stepStatusLabel)}
                 </div>
               </div>
+              ${renderMasteryMeter(insight, true)}
               <p class="bonus-card__reason">${escapeHtml(step.reason)}</p>
+              ${recommendation ? `<p class="stage-card__training">${escapeHtml(recommendation.reason)}</p>` : ""}
               <div class="bonus-card__footer">
                 <div class="bonus-card__meta">${step.skills.map((skill) => renderMetaTag(skill)).join("")}</div>
                 <div class="stage-card__actions">
@@ -3028,6 +4941,13 @@ function renderCampaign() {
   const isCurrent = state.mainCleared >= world.startIndex - 1 && state.mainCleared < world.endIndex;
   const biome = getBiomeTheme(world);
   const liveStep = isCurrent ? getCurrentStep() : null;
+  const worldTrainingRecommendations = trainingEngine.recommendations
+    .filter((entry) => entry.step.worldId === world.id)
+    .slice(0, 3);
+  const worldSignals = trainingEngine.activeSignals
+    .filter((signal) => [...world.levels, ...world.bonusPacks.flatMap((pack) => pack.steps)]
+      .some((step) => getTrainingAffinities(step)[signal.id] > 0.6))
+    .slice(0, 2);
 
   let summary = "Locked until earlier worlds are finished.";
   if (world.routeRole === "warmup") {
@@ -3127,6 +5047,19 @@ function renderCampaign() {
                 </div>
               </div>
             </section>
+            <section class="world__intel world__intel--training">
+              <p class="world__eyebrow">Training Read</p>
+              ${
+                worldSignals.length
+                  ? `<div class="world__tag-row">${worldSignals.map((signal) => renderBadge(signal.shortLabel, "badge badge--training")).join("")}</div>`
+                  : ""
+              }
+              ${
+                worldTrainingRecommendations.length
+                  ? `<div class="training-queue training-queue--world">${worldTrainingRecommendations.map((entry) => renderTrainingRecommendation(entry, true)).join("")}</div>`
+                  : '<p class="bonus-area__empty">No hot spots in this world yet. Use it for baseline reps or keep the main climb moving.</p>'
+              }
+            </section>
             ${
               world.bonusPacks.length
                 ? `<section class="bonus-area" id="bonus-${world.id}"><h3 class="bonus-area__title">Optional Branches</h3><div class="bonus-area__packs">${world.bonusPacks.map((pack) => renderBonusPack(pack, profile)).join("")}</div></section>`
@@ -3166,9 +5099,17 @@ function render(options = {}) {
   syncSetupBodyLock();
   syncPages();
   normalizeSelectedWorld();
+  refreshDerivedState();
   renderHeroStats();
   renderThemeSwitcher();
   renderObjectiveCard();
+  renderCoachPanel();
+  renderRewardPanel();
+  renderQuestsPanel();
+  renderPlannerPanel();
+  renderMasteryPanel();
+  renderBossPanel();
+  renderTrainingPanel();
   renderWorldNav();
   renderRouteToolbar();
   renderCampaign();
@@ -3224,6 +5165,11 @@ document.addEventListener("click", (event) => {
     saveLevelNote(actionTarget.dataset.levelKey, input?.value || "", actionTarget.dataset.levelLabel || "this level");
     return;
   }
+  if (action === "log-session") {
+    const shell = actionTarget.closest("[data-training-shell]");
+    logTrainingSession(actionTarget.dataset.metaKey, shell, actionTarget.dataset.levelLabel || "this level");
+    return;
+  }
   if (action === "undo-change") {
     undoLastChange();
     return;
@@ -3246,8 +5192,8 @@ document.addEventListener("click", (event) => {
   }
   if (action === "jump-node") {
     const { worldId, targetId } = actionTarget.dataset;
-    currentPage = "route";
     if (worldId) {
+      currentPage = "route";
       focusWorld(worldId);
       saveState();
       render();
@@ -3264,6 +5210,12 @@ document.addEventListener("click", (event) => {
   if (action === "set-theme") {
     applyTheme(actionTarget.dataset.theme);
     recordActivity(`Changed theme to ${THEMES.find((theme) => theme.id === state.theme)?.label || "custom"}.`);
+    saveState();
+    render();
+    return;
+  }
+  if (action === "set-session-mode") {
+    state.coach.sessionMode = normalizeSessionMode(actionTarget.dataset.mode);
     saveState();
     render();
     return;

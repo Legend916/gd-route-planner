@@ -6,7 +6,7 @@
   <title>GD Route Planner</title>
   <meta
     name="description"
-    content="Build an optimized Geometry Dash route from your current skill level to the top."
+    content="Build an adaptive Geometry Dash route and training engine that learns from your actual weak spots."
   >
   <meta name="application-name" content="GD Route Planner">
   <meta name="theme-color" content="#0b1220">
@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GD Route Planner">
   <meta property="og:title" content="GD Route Planner">
-  <meta property="og:description" content="Build an optimized Geometry Dash route from your current skill level to the top.">
+  <meta property="og:description" content="Build an adaptive Geometry Dash route and training engine that learns from your actual weak spots.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://gdrouteplanner.com/assets/og-card.png">
   <meta property="og:image:type" content="image/png">
@@ -23,7 +23,7 @@
   <meta property="og:site_name" content="GD Route Planner">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="GD Route Planner">
-  <meta name="twitter:description" content="Build an optimized Geometry Dash route from your current skill level to the top.">
+  <meta name="twitter:description" content="Build an adaptive Geometry Dash route and training engine that learns from your actual weak spots.">
   <meta name="twitter:image" content="https://gdrouteplanner.com/assets/og-card.png">
   <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
   <link rel="alternate icon" type="image/png" href="assets/icon-32.png">
@@ -48,11 +48,11 @@
             <p class="section-kicker">Geometry Dash</p>
             <h1>GD Route Planner</h1>
             <p class="app-header__lede">
-              Build an optimized path from your current skill level to the top.
+              Build the route, then let the site learn where your runs actually break.
             </p>
             <div class="brand-lockup__meta">
-              <span class="brand-chip">Adaptive route optimizer</span>
-              <span class="brand-chip brand-chip--soft">Built to feel like a tool</span>
+              <span class="brand-chip">Adaptive training engine</span>
+              <span class="brand-chip brand-chip--soft">Route planner plus live weakness tracking</span>
             </div>
           </div>
         </div>
@@ -118,35 +118,24 @@
         <div class="overview-layout">
           <section class="objective-card panel" id="objective-card" aria-live="polite"></section>
 
-          <aside class="summary-panel panel">
-            <div class="panel-heading panel-heading--compact">
-              <div>
-                <p class="panel-heading__kicker">Workspace Guide</p>
-                <h2 id="page-overview-title">How To Use It</h2>
+          <div class="overview-sidebar">
+            <aside class="coach-panel panel" id="coach-panel" aria-live="polite">
+              <div class="panel-heading panel-heading--compact">
+                <div>
+                  <p class="panel-heading__kicker">Daily Loop</p>
+                  <h2 id="page-overview-title">Command Uplink</h2>
+                </div>
               </div>
-            </div>
-            <p class="summary-panel__copy">
-              Overview keeps the active target and progress front and center. Route opens the full ladder one world at a time. Settings holds themes, save tools, and source links.
-            </p>
-            <div class="summary-panel__items">
-              <article class="summary-panel__item">
-                <span class="summary-panel__label">Overview</span>
-                <strong>See what to play next.</strong>
-              </article>
-              <article class="summary-panel__item">
-                <span class="summary-panel__label">Route</span>
-                <strong>Inspect the campaign in detail.</strong>
-              </article>
-              <article class="summary-panel__item">
-                <span class="summary-panel__label">Settings</span>
-                <strong>Manage theme, setup, and saves.</strong>
-              </article>
-            </div>
-            <div class="summary-panel__actions">
-              <button class="button" type="button" data-action="set-page" data-page="route">Open Route</button>
-              <button class="button button--ghost" type="button" data-action="set-page" data-page="settings">Open Settings</button>
-            </div>
-          </aside>
+            </aside>
+
+            <aside class="reward-panel panel" id="reward-panel" aria-live="polite"></aside>
+          </div>
+
+          <section class="quests-panel panel" id="quests-panel" aria-live="polite"></section>
+          <section class="planner-panel panel" id="planner-panel" aria-live="polite"></section>
+          <section class="mastery-panel panel" id="mastery-panel" aria-live="polite"></section>
+          <section class="boss-panel panel" id="boss-panel" aria-live="polite"></section>
+          <aside class="training-panel panel" id="training-panel" aria-live="polite"></aside>
         </div>
       </section>
 

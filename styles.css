@@ -572,14 +572,47 @@ h4 {
 
 .overview-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr);
   gap: 20px;
   align-items: start;
 }
 
-.summary-panel {
+.overview-sidebar {
+  display: grid;
+  gap: 20px;
+}
+
+.summary-panel,
+.coach-panel,
+.reward-panel,
+.quests-panel,
+.planner-panel,
+.mastery-panel,
+.boss-panel {
   display: grid;
   gap: 16px;
+}
+
+.training-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.quests-panel {
+  grid-column: 1 / -1;
+}
+
+.planner-panel {
+  grid-column: 1;
+}
+
+.mastery-panel,
+.training-panel {
+  grid-column: 2;
+}
+
+.boss-panel {
+  grid-column: 1;
 }
 
 .panel-heading {
@@ -595,6 +628,13 @@ h4 {
 
 .panel-heading h2,
 .summary-panel h2,
+.coach-panel h2,
+.reward-panel h2,
+.quests-panel h2,
+.planner-panel h2,
+.mastery-panel h2,
+.boss-panel h2,
+.training-panel h2,
 .route-sidebar h2,
 .theme-panel h2,
 .action-panel h2,
@@ -759,6 +799,265 @@ h4 {
 
 .objective-card__tag-row {
   margin-top: 16px;
+}
+
+.mastery-meter {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mastery-meter--compact {
+  height: 8px;
+}
+
+.mastery-meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.mastery-meter__fill--cold {
+  background: linear-gradient(90deg, #4a648f 0%, #7a93b4 100%);
+}
+
+.mastery-meter__fill--building {
+  background: linear-gradient(90deg, #5f91ff 0%, #7dd8ff 100%);
+}
+
+.mastery-meter__fill--stable {
+  background: linear-gradient(90deg, #6cd6b1 0%, #8ef0d1 100%);
+}
+
+.mastery-meter__fill--locked {
+  background: linear-gradient(90deg, #ffd66e 0%, #ff9f5e 100%);
+}
+
+.mastery-meter__fill--mastered {
+  background: linear-gradient(90deg, #fff2a3 0%, #ff7cc0 100%);
+}
+
+.badge--mastery {
+  color: var(--text);
+}
+
+.badge--mastery-cold {
+  background: rgba(122, 147, 180, 0.16);
+  border-color: rgba(122, 147, 180, 0.36);
+}
+
+.badge--mastery-building {
+  background: rgba(95, 145, 255, 0.16);
+  border-color: rgba(95, 145, 255, 0.36);
+}
+
+.badge--mastery-stable {
+  background: rgba(108, 214, 177, 0.16);
+  border-color: rgba(108, 214, 177, 0.36);
+}
+
+.badge--mastery-locked {
+  background: rgba(255, 214, 110, 0.16);
+  border-color: rgba(255, 214, 110, 0.4);
+}
+
+.badge--mastery-mastered {
+  background: rgba(255, 124, 192, 0.14);
+  border-color: rgba(255, 124, 192, 0.34);
+}
+
+.quests-grid,
+.mastery-grid,
+.session-plan,
+.reward-badges {
+  display: grid;
+  gap: 12px;
+}
+
+.quests-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reward-panel__hero,
+.boss-panel__hero,
+.session-block,
+.mastery-card,
+.quest-card {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.quest-card {
+  display: grid;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.quest-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 44%;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 70%);
+}
+
+.quest-card--push {
+  border-color: rgba(255, 214, 110, 0.26);
+  background: linear-gradient(180deg, rgba(255, 214, 110, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.quest-card--repair {
+  border-color: rgba(104, 211, 255, 0.28);
+  background: linear-gradient(180deg, rgba(104, 211, 255, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.quest-card--reclaim {
+  border-color: rgba(99, 212, 154, 0.28);
+  background: linear-gradient(180deg, rgba(99, 212, 154, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.quest-card--boss {
+  border-color: rgba(255, 140, 140, 0.28);
+  background: linear-gradient(180deg, rgba(255, 140, 140, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.quest-card--complete {
+  box-shadow: 0 0 0 1px rgba(99, 212, 154, 0.3), var(--shadow);
+}
+
+.quest-card__top,
+.mastery-card__top,
+.session-block__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quest-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.quest-card__title,
+.session-block h3,
+.mastery-card h3,
+.boss-panel__hero h3 {
+  font-size: 1.18rem;
+  line-height: 1.1;
+}
+
+.quest-card__copy {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.quest-card__actions,
+.boss-panel__grid {
+  display: grid;
+  gap: 12px;
+}
+
+.quest-card__actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reward-panel__hero,
+.boss-panel__hero {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.reward-panel__value {
+  display: block;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  line-height: 0.95;
+}
+
+.reward-panel__meter,
+.boss-panel__meter {
+  margin-top: -4px;
+}
+
+.reward-badges {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reward-badge {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 4px;
+}
+
+.reward-badge span {
+  color: var(--muted);
+}
+
+.reward-badge.is-earned {
+  border-color: rgba(99, 212, 154, 0.36);
+  background: rgba(99, 212, 154, 0.12);
+}
+
+.session-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-block {
+  display: grid;
+  gap: 12px;
+}
+
+.mastery-card {
+  display: grid;
+  gap: 10px;
+}
+
+.mastery-card--cold {
+  border-color: rgba(122, 147, 180, 0.24);
+}
+
+.mastery-card--building {
+  border-color: rgba(95, 145, 255, 0.24);
+}
+
+.mastery-card--stable {
+  border-color: rgba(108, 214, 177, 0.24);
+}
+
+.mastery-card--locked {
+  border-color: rgba(255, 214, 110, 0.24);
+}
+
+.mastery-card--mastered {
+  border-color: rgba(255, 124, 192, 0.24);
+}
+
+.boss-panel__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.boss-panel__list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  display: grid;
+  gap: 8px;
 }
 
 .route-layout {
@@ -947,6 +1246,88 @@ h4 {
   overflow-wrap: anywhere;
 }
 
+.training-panel__stats,
+.training-panel__signals,
+.training-panel__queue,
+.training-panel__history,
+.training-queue {
+  display: grid;
+  gap: 12px;
+}
+
+.training-panel__stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.training-panel__empty,
+.session-panel__empty,
+.training-signal p,
+.stage-card__training {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.training-signal {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 10px;
+}
+
+.training-signal__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.training-queue__item {
+  width: 100%;
+  min-height: 58px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.training-queue__item:hover {
+  border-color: rgba(104, 211, 255, 0.42);
+  background: rgba(104, 211, 255, 0.09);
+  transform: translateY(-1px);
+}
+
+.training-queue__item--compact {
+  min-height: 0;
+  padding: 12px;
+}
+
+.training-queue__rank {
+  min-width: 38px;
+  color: var(--muted);
+  font-family: var(--font-condensed);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+}
+
+.training-queue__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.training-queue__copy span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .campaign {
   display: grid;
   gap: 16px;
@@ -1031,6 +1412,11 @@ h4 {
   border-bottom: 0;
 }
 
+.world__intel--training {
+  display: grid;
+  gap: 12px;
+}
+
 .world.is-collapsed .world__body {
   display: none;
 }
@@ -1079,9 +1465,18 @@ h4 {
   border-left-color: var(--world-accent);
 }
 
+.stage-card--priority,
+.bonus-card--priority {
+  box-shadow: 0 0 0 1px rgba(104, 211, 255, 0.24), var(--shadow);
+}
+
 .stage-card__reason,
 .bonus-card__reason {
   margin-top: 12px;
+}
+
+.stage-card__training {
+  margin-top: 10px;
 }
 
 .stage-card__footer,
@@ -1097,6 +1492,12 @@ h4 {
 .branch-card.is-locked,
 .bonus-card.is-locked {
   opacity: 0.72;
+}
+
+.badge--training {
+  border-color: rgba(104, 211, 255, 0.34);
+  background: rgba(104, 211, 255, 0.16);
+  color: var(--text);
 }
 
 .tracker-panel {
@@ -1130,6 +1531,77 @@ h4 {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.session-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 12px;
+}
+
+.session-panel__meta,
+.session-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.session-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.session-field__input {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.session-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.session-check input {
+  accent-color: var(--accent);
+}
+
+.session-history {
+  display: grid;
+  gap: 8px;
+}
+
+.session-history__item {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 4px;
+}
+
+.session-history__item span {
+  color: var(--muted);
 }
 
 .tracker-chip {
@@ -1346,8 +1818,27 @@ h4 {
     grid-template-columns: 1fr;
   }
 
+  .objective-card__layout {
+    grid-template-columns: 1fr;
+  }
+
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .training-panel__stats,
+  .session-panel__grid,
+  .quests-grid,
+  .boss-panel__grid,
+  .reward-badges {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-panel,
+  .mastery-panel,
+  .boss-panel,
+  .training-panel {
+    grid-column: auto;
   }
 
   .route-sidebar {
@@ -1389,11 +1880,15 @@ h4 {
   .progress-card__top,
   .objective-card__header,
   .objective-card__layout,
+  .quest-card__top,
+  .mastery-card__top,
+  .session-block__top,
   .stage-card__header,
   .bonus-card__top,
   .world__overview-top,
   .page-nav,
-  .route-toolbar__top {
+  .route-toolbar__top,
+  .boss-panel__hero {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1412,6 +1907,7 @@ h4 {
   }
 
   .summary-panel__actions > *,
+  .quest-card__actions > *,
   .route-toolbar__actions > *,
   .action-panel__buttons > *,
   .setup-actions > *,
@@ -1426,9 +1922,19 @@ h4 {
     flex-direction: column;
   }
 
+  .training-queue__item {
+    flex-direction: column;
+  }
+
+  .reward-panel__hero,
+  .boss-panel__hero {
+    grid-template-columns: 1fr;
+  }
+
   .stats-grid,
   .setup-options,
-  .setup-options--themes {
+  .setup-options--themes,
+  .quest-card__actions {
     grid-template-columns: 1fr;
   }
 
