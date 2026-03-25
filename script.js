@@ -3122,21 +3122,20 @@ function buildBossReadiness(insightByMetaKey, excludedKeys = new Set()) {
   };
 }
 
-const DIFFICULTY_TIER_ORDER = {
-  Easy: 1,
-  Normal: 2,
-  Hard: 3,
-  Harder: 4,
-  Insane: 5,
-  "Easy Demon": 6,
-  "Medium Demon": 7,
-  "Hard Demon": 8,
-  "Insane Demon": 9,
-  "Extreme Demon": 10,
-};
-
 function getDifficultyTierValue(step) {
-  return DIFFICULTY_TIER_ORDER[step?.difficulty] || 1;
+  const difficultyTierOrder = {
+    Easy: 1,
+    Normal: 2,
+    Hard: 3,
+    Harder: 4,
+    Insane: 5,
+    "Easy Demon": 6,
+    "Medium Demon": 7,
+    "Hard Demon": 8,
+    "Insane Demon": 9,
+    "Extreme Demon": 10,
+  };
+  return difficultyTierOrder[step?.difficulty] || 1;
 }
 
 function getStepProgressOrdinal(step) {
