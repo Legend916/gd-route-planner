@@ -2498,6 +2498,7 @@ function buildTrainingEngine() {
   const issueTotals = Object.fromEntries(TRAINING_SIGNAL_META.map((signal) => [signal.id, 0]));
   const byMetaKey = new Map();
   const now = Date.now();
+  const anchorStep = getProgressAnchorStep();
 
   for (const session of state.trainingLog) {
     const aggregate = getOrCreateTrainingAggregate(byMetaKey, session.metaKey);
@@ -2669,6 +2670,7 @@ function buildTrainingEngine() {
       if (aggregate.clearSessions && aggregate.roughSessions === 0 && status === "cleared") {
         score -= Math.min(10, aggregate.clearSessions * 2);
       }
+      score += getProgressionRelevanceScore(step, anchorStep, { preferRecent: true, allowBonusBias: true });
 
       const dominantSignal = activeSignals
         .map((signal) => ({
@@ -2700,6 +2702,7 @@ function buildTrainingEngine() {
           : "Keeps pressure on your current route without drifting away from the ladder.",
       };
     })
+    .filter((entry) => isRecommendationBandStep(entry.step, anchorStep, { preferRecent: true, allowBonusBias: true }))
     .sort((left, right) => right.score - left.score)
     .slice(0, 6)
     .map((entry, index) => ({
@@ -3136,6 +3139,104 @@ function getDifficultyTierValue(step) {
   return DIFFICULTY_TIER_ORDER[step?.difficulty] || 1;
 }
 
+function getStepProgressOrdinal(step) {
+  if (!step) {
+    return 0;
+  }
+  if (typeof step.number === "number") {
+    return step.number;
+  }
+  const world = routeData.preparedWorlds[step.worldIndex];
+  if (!world) {
+    return 0;
+  }
+  return Math.round((world.startIndex + world.endIndex) / 2);
+}
+
+function getProgressAnchorStep() {
+  return getCurrentStep() || routeData.allMain[routeData.allMain.length - 1] || null;
+}
+
+function isStepTooFarBelowAnchor(step, anchorStep) {
+  if (!step || !anchorStep) {
+    return false;
+  }
+
+  const stepOrdinal = getStepProgressOrdinal(step);
+  const anchorOrdinal = getStepProgressOrdinal(anchorStep);
+  const worldDistance = Math.abs((step.worldIndex || 0) - (anchorStep.worldIndex || 0));
+  const difficultyDistance = Math.abs(getDifficultyTierValue(step) - getDifficultyTierValue(anchorStep));
+  let maxBacktrack = 30;
+  if (anchorOrdinal >= 70) {
+    maxBacktrack = 20;
+  }
+  if (anchorOrdinal >= 110) {
+    maxBacktrack = 14;
+  }
+  if (anchorOrdinal >= 140) {
+    maxBacktrack = 10;
+  }
+
+  return stepOrdinal < anchorOrdinal - maxBacktrack && worldDistance > 1 && difficultyDistance > 1;
+}
+
+function getProgressionRelevanceScore(step, anchorStep, options = {}) {
+  if (!step || !anchorStep) {
+    return 0;
+  }
+
+  const {
+    preferRecent = true,
+    allowBonusBias = true,
+    preferSameWorld = true,
+  } = options;
+  const stepOrdinal = getStepProgressOrdinal(step);
+  const anchorOrdinal = getStepProgressOrdinal(anchorStep);
+  const numberDistance = Math.abs(stepOrdinal - anchorOrdinal);
+  const worldDistance = Math.abs((step.worldIndex || 0) - (anchorStep.worldIndex || 0));
+  const difficultyDistance = Math.abs(getDifficultyTierValue(step) - getDifficultyTierValue(anchorStep));
+  const isBonus = typeof step.number !== "number";
+
+  let score = 0;
+  if (preferSameWorld) {
+    score += worldDistance === 0 ? 16 : worldDistance === 1 ? 8 : worldDistance === 2 ? 0 : -12;
+  } else {
+    score += worldDistance === 0 ? 10 : worldDistance === 1 ? 4 : -6;
+  }
+  score -= difficultyDistance * 5;
+  score -= Math.max(0, numberDistance - 8) * 0.42;
+  if (preferRecent) {
+    score += stepOrdinal >= anchorOrdinal - 8 ? 8 : stepOrdinal >= anchorOrdinal - 16 ? 2 : -6;
+  }
+  if (isBonus && allowBonusBias && worldDistance <= 1) {
+    score += 4;
+  }
+  if (isStepTooFarBelowAnchor(step, anchorStep)) {
+    score -= 42;
+  }
+
+  return score;
+}
+
+function isRecommendationBandStep(step, anchorStep, options = {}) {
+  if (!step || !anchorStep) {
+    return true;
+  }
+  if (!isStepTooFarBelowAnchor(step, anchorStep)) {
+    return true;
+  }
+  return getProgressionRelevanceScore(step, anchorStep, options) >= -10;
+}
+
+function filterRecommendationBand(candidates, getStep, anchorStep, options = {}) {
+  if (!anchorStep || !Array.isArray(candidates) || !candidates.length) {
+    return candidates;
+  }
+
+  const filtered = candidates.filter((candidate) => isRecommendationBandStep(getStep(candidate), anchorStep, options));
+  return filtered.length ? filtered : candidates;
+}
+
 function scoreWarmupCandidate(candidate, pushInsight) {
   const candidateStep = candidate?.step;
   const pushStep = pushInsight?.step;
@@ -3259,6 +3360,7 @@ function buildCoachEngine() {
   const currentStep = getCurrentStep() || routeData.allMain[routeData.allMain.length - 1] || null;
   const currentInsight = currentStep ? insightByMetaKey.get(currentStep.metaKey) || null : null;
   const activeWorld = currentStep ? getCurrentWorld() : routeData.preparedWorlds[routeData.preparedWorlds.length - 1];
+  const anchorStep = currentStep || getProgressAnchorStep();
 
   const pushTarget = currentStep || routeData.allMain[routeData.allMain.length - 1];
   const pushProgress = buildQuestProgress(pushTarget?.metaKey, todayKey, (session) => ["progress", "stable", "clear"].includes(session.result), "1 solid push session");
@@ -3284,9 +3386,14 @@ function buildCoachEngine() {
 
   const excludedKeys = new Set(pushQuest?.target?.metaKey ? [pushQuest.target.metaKey] : []);
   const primarySignal = trainingEngine.primarySignal;
-  const weaknessCandidates = insights
+  const weaknessCandidates = filterRecommendationBand(
+    insights
     .filter((insight) => insight.unlocked)
-    .sort((left, right) => right.repairWeight - left.repairWeight);
+    .sort((left, right) => right.repairWeight - left.repairWeight),
+    (insight) => insight.step,
+    anchorStep,
+    { preferRecent: true, allowBonusBias: true },
+  );
   const weaknessInsight = pickDistinctInsight(
     primarySignal
       ? weaknessCandidates.filter((insight) => (insight.affinities[primarySignal.id] || 0) > 0.35 || (insight.aggregate.issueScores[primarySignal.id] || 0) > 0.8)
@@ -3327,9 +3434,14 @@ function buildCoachEngine() {
     progressText: weaknessProgress?.label || "Needs one repair rep",
   } : null;
 
-  const reclaimCandidates = insights
+  const reclaimCandidates = filterRecommendationBand(
+    insights
     .filter((insight) => insight.unlocked && insight.reclaimWeight > -900)
-    .sort((left, right) => right.reclaimWeight - left.reclaimWeight);
+    .sort((left, right) => right.reclaimWeight - left.reclaimWeight),
+    (insight) => insight.step,
+    anchorStep,
+    { preferRecent: true, allowBonusBias: false },
+  );
   const reclaimInsight = pickDistinctInsight(reclaimCandidates, excludedKeys)
     || insights.find((insight) => insight.cleared && insight.unlocked)
     || currentInsight;
@@ -3417,9 +3529,15 @@ function buildCoachEngine() {
   ].filter(Boolean))).map((metaKey) => insightByMetaKey.get(metaKey)).filter(Boolean);
 
   if (masteryHighlights.length < 4) {
-    insights
+    filterRecommendationBand(
+      insights
       .filter((insight) => insight.unlocked && !masteryHighlights.some((entry) => entry.step.metaKey === insight.step.metaKey))
       .sort((left, right) => right.reclaimWeight - left.reclaimWeight || right.masteryScore - left.masteryScore)
+      ,
+      (insight) => insight.step,
+      anchorStep,
+      { preferRecent: true, allowBonusBias: true },
+    )
       .slice(0, 4 - masteryHighlights.length)
       .forEach((insight) => masteryHighlights.push(insight));
   }
@@ -3750,7 +3868,8 @@ function buildSkillMapEngine() {
 
   const unlockedCandidates = allSteps
     .filter((step) => currentStep && getStepRouteKey(step) !== getStepRouteKey(currentStep))
-    .filter((step) => isTrainingCandidateUnlocked(step));
+    .filter((step) => isTrainingCandidateUnlocked(step))
+    .filter((step) => isRecommendationBandStep(step, currentStep, { preferRecent: true, allowBonusBias: true }));
 
   const buildAlternate = (kind, label, candidate, tradeoff, emphasisSkillId = null) => {
     if (!candidate) {
