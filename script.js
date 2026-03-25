@@ -3119,22 +3119,98 @@ function buildBossReadiness(insightByMetaKey, excludedKeys = new Set()) {
   };
 }
 
+const DIFFICULTY_TIER_ORDER = {
+  Easy: 1,
+  Normal: 2,
+  Hard: 3,
+  Harder: 4,
+  Insane: 5,
+  "Easy Demon": 6,
+  "Medium Demon": 7,
+  "Hard Demon": 8,
+  "Insane Demon": 9,
+  "Extreme Demon": 10,
+};
+
+function getDifficultyTierValue(step) {
+  return DIFFICULTY_TIER_ORDER[step?.difficulty] || 1;
+}
+
+function scoreWarmupCandidate(candidate, pushInsight) {
+  const candidateStep = candidate?.step;
+  const pushStep = pushInsight?.step;
+  if (!candidateStep || !pushStep) {
+    return -999;
+  }
+
+  const candidateNumber = typeof candidateStep.number === "number" ? candidateStep.number : pushStep.number || 0;
+  const pushNumber = typeof pushStep.number === "number" ? pushStep.number : candidateNumber;
+  const worldDistance = Math.abs((candidateStep.worldIndex || 0) - (pushStep.worldIndex || 0));
+  const numberDistance = Math.abs(candidateNumber - pushNumber);
+  const difficultyDistance = Math.abs(getDifficultyTierValue(candidateStep) - getDifficultyTierValue(pushStep));
+  const candidateStatus = getStepDisplayStatus(candidateStep);
+  const sameWorld = candidateStep.worldId === pushStep.worldId;
+  const sameBand = worldDistance <= 1 && difficultyDistance <= 1;
+  const isBonus = typeof candidateStep.number !== "number";
+
+  let score = 0;
+  score += candidate.cleared ? 20 : candidate.status === "consistent" ? 14 : 8;
+  score += Math.max(0, 22 - Math.abs(candidate.masteryScore - 62) * 0.38);
+  score += candidate.freshness.score * 0.08;
+  score += sameWorld ? 26 : worldDistance === 1 ? 14 : worldDistance === 2 ? 4 : -18;
+  score += sameBand ? 10 : 0;
+  score -= Math.max(0, numberDistance - 8) * 0.55;
+  score -= difficultyDistance * 8;
+
+  if (pushNumber >= 35) {
+    score -= candidateNumber < Math.max(1, pushNumber - 28) ? 24 : 0;
+  }
+  if (pushNumber >= 70) {
+    score -= candidateNumber < Math.max(1, pushNumber - 20) ? 30 : 0;
+  }
+  if (pushNumber >= 110) {
+    score -= candidateNumber < Math.max(1, pushNumber - 14) ? 38 : 0;
+  }
+  if (pushNumber >= 140) {
+    score -= candidateNumber < Math.max(1, pushNumber - 10) ? 44 : 0;
+  }
+
+  if (candidateStep.isBoss) {
+    score -= 8;
+  }
+  if (candidateStatus === "revisit") {
+    score -= 5;
+  }
+  if (candidateStatus === "practicing") {
+    score -= 4;
+  }
+  if (isBonus && worldDistance <= 1) {
+    score += 4;
+  }
+
+  return score;
+}
+
 function buildSessionPlan(mode, pushQuest, weaknessQuest, reclaimQuest, insightByMetaKey) {
   const excludedWarmupKeys = new Set(
     [pushQuest?.target?.metaKey, weaknessQuest?.target?.metaKey, reclaimQuest?.target?.metaKey].filter(Boolean),
   );
+  const pushInsight = insightByMetaKey.get(pushQuest?.target?.metaKey)
+    || insightByMetaKey.get(weaknessQuest?.target?.metaKey)
+    || Array.from(insightByMetaKey.values()).find((insight) => insight.unlocked)
+    || null;
   const warmupCandidates = Array.from(insightByMetaKey.values())
     .filter((insight) => insight.unlocked && (insight.cleared || insight.status === "consistent" || insight.status === "practicing"))
     .sort((left, right) => {
-      const leftScore = (left.cleared ? 18 : 8) + Math.max(0, 18 - Math.abs(left.masteryScore - 62) * 0.35) + left.freshness.score * 0.08;
-      const rightScore = (right.cleared ? 18 : 8) + Math.max(0, 18 - Math.abs(right.masteryScore - 62) * 0.35) + right.freshness.score * 0.08;
+      const leftScore = scoreWarmupCandidate(left, pushInsight);
+      const rightScore = scoreWarmupCandidate(right, pushInsight);
       return rightScore - leftScore;
     });
   const warmupInsight = pickDistinctInsight(warmupCandidates, excludedWarmupKeys)
     || insightByMetaKey.get(pushQuest?.target?.metaKey)
     || Array.from(insightByMetaKey.values())[0]
     || null;
-  const pushInsight = insightByMetaKey.get(pushQuest?.target?.metaKey) || warmupInsight;
+  const resolvedPushInsight = insightByMetaKey.get(pushQuest?.target?.metaKey) || warmupInsight;
   const repairInsight = insightByMetaKey.get(weaknessQuest?.target?.metaKey) || pushInsight;
   const reclaimInsight = insightByMetaKey.get(reclaimQuest?.target?.metaKey) || repairInsight;
 
@@ -3154,7 +3230,7 @@ function buildSessionPlan(mode, pushQuest, weaknessQuest, reclaimQuest, insightB
         id: "push",
         label: "Main Push",
         minutes: mode.blocks.push,
-        insight: pushInsight,
+        insight: resolvedPushInsight,
         copy: pushQuest?.goal || "Put the longest block into the live route gate.",
       },
       {
