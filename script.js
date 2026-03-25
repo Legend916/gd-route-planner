@@ -3217,14 +3217,33 @@ function getProgressionRelevanceScore(step, anchorStep, options = {}) {
   return score;
 }
 
+function getRecommendationBandThreshold(anchorStep) {
+  const anchorOrdinal = getStepProgressOrdinal(anchorStep);
+  if (anchorOrdinal >= 140) {
+    return 2;
+  }
+  if (anchorOrdinal >= 110) {
+    return 0;
+  }
+  if (anchorOrdinal >= 70) {
+    return -4;
+  }
+  if (anchorOrdinal >= 35) {
+    return -8;
+  }
+  if (anchorOrdinal >= 18) {
+    return -10;
+  }
+  return -18;
+}
+
 function isRecommendationBandStep(step, anchorStep, options = {}) {
   if (!step || !anchorStep) {
     return true;
   }
-  if (!isStepTooFarBelowAnchor(step, anchorStep)) {
-    return true;
-  }
-  return getProgressionRelevanceScore(step, anchorStep, options) >= -10;
+
+  const relevanceScore = getProgressionRelevanceScore(step, anchorStep, options);
+  return relevanceScore >= getRecommendationBandThreshold(anchorStep);
 }
 
 function filterRecommendationBand(candidates, getStep, anchorStep, options = {}) {
@@ -3233,7 +3252,7 @@ function filterRecommendationBand(candidates, getStep, anchorStep, options = {})
   }
 
   const filtered = candidates.filter((candidate) => isRecommendationBandStep(getStep(candidate), anchorStep, options));
-  return filtered.length ? filtered : candidates;
+  return filtered;
 }
 
 function scoreWarmupCandidate(candidate, pushInsight) {
@@ -3289,6 +3308,27 @@ function scoreWarmupCandidate(candidate, pushInsight) {
   }
 
   return score;
+}
+
+function scoreCoachRecommendation(insight, anchorStep, options = {}) {
+  if (!insight) {
+    return -999;
+  }
+
+  const {
+    weightKey = "repairWeight",
+    preferRecent = true,
+    allowBonusBias = true,
+    preferSameWorld = true,
+    relevanceWeight = 1.8,
+  } = options;
+
+  return (insight[weightKey] || 0)
+    + getProgressionRelevanceScore(insight.step, anchorStep, {
+      preferRecent,
+      allowBonusBias,
+      preferSameWorld,
+    }) * relevanceWeight;
 }
 
 function buildSessionPlan(mode, pushQuest, weaknessQuest, reclaimQuest, insightByMetaKey) {
@@ -3388,15 +3428,27 @@ function buildCoachEngine() {
   const weaknessCandidates = filterRecommendationBand(
     insights
     .filter((insight) => insight.unlocked)
-    .sort((left, right) => right.repairWeight - left.repairWeight),
+    .sort((left, right) => scoreCoachRecommendation(right, anchorStep, {
+      weightKey: "repairWeight",
+      preferRecent: true,
+      allowBonusBias: true,
+    }) - scoreCoachRecommendation(left, anchorStep, {
+      weightKey: "repairWeight",
+      preferRecent: true,
+      allowBonusBias: true,
+    })),
     (insight) => insight.step,
     anchorStep,
     { preferRecent: true, allowBonusBias: true },
   );
+  const primaryWeaknessCandidates = primarySignal
+    ? weaknessCandidates.filter((insight) => (insight.affinities[primarySignal.id] || 0) > 0.35 || (insight.aggregate.issueScores[primarySignal.id] || 0) > 0.8)
+    : weaknessCandidates;
   const weaknessInsight = pickDistinctInsight(
-    primarySignal
-      ? weaknessCandidates.filter((insight) => (insight.affinities[primarySignal.id] || 0) > 0.35 || (insight.aggregate.issueScores[primarySignal.id] || 0) > 0.8)
-      : weaknessCandidates,
+    primaryWeaknessCandidates,
+    excludedKeys,
+  ) || pickDistinctInsight(
+    weaknessCandidates,
     excludedKeys,
   ) || currentInsight;
   if (weaknessInsight?.step?.metaKey) {
@@ -3436,13 +3488,37 @@ function buildCoachEngine() {
   const reclaimCandidates = filterRecommendationBand(
     insights
     .filter((insight) => insight.unlocked && insight.reclaimWeight > -900)
-    .sort((left, right) => right.reclaimWeight - left.reclaimWeight),
+    .sort((left, right) => scoreCoachRecommendation(right, anchorStep, {
+      weightKey: "reclaimWeight",
+      preferRecent: true,
+      allowBonusBias: false,
+    }) - scoreCoachRecommendation(left, anchorStep, {
+      weightKey: "reclaimWeight",
+      preferRecent: true,
+      allowBonusBias: false,
+    })),
+    (insight) => insight.step,
+    anchorStep,
+    { preferRecent: true, allowBonusBias: false },
+  );
+  const reclaimFallbackCandidates = filterRecommendationBand(
+    insights
+    .filter((insight) => insight.unlocked && (insight.cleared || insight.status === "revisit" || insight.bestPercent >= 85 || insight.status === "consistent"))
+    .sort((left, right) => scoreCoachRecommendation(right, anchorStep, {
+      weightKey: "reclaimWeight",
+      preferRecent: true,
+      allowBonusBias: false,
+    }) - scoreCoachRecommendation(left, anchorStep, {
+      weightKey: "reclaimWeight",
+      preferRecent: true,
+      allowBonusBias: false,
+    })),
     (insight) => insight.step,
     anchorStep,
     { preferRecent: true, allowBonusBias: false },
   );
   const reclaimInsight = pickDistinctInsight(reclaimCandidates, excludedKeys)
-    || insights.find((insight) => insight.cleared && insight.unlocked)
+    || pickDistinctInsight(reclaimFallbackCandidates, excludedKeys)
     || currentInsight;
   if (reclaimInsight?.step?.metaKey) {
     excludedKeys.add(reclaimInsight.step.metaKey);
